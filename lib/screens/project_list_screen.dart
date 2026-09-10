@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../db/database.dart';
 import '../models/models.dart';
@@ -7,8 +6,9 @@ import '../theme.dart';
 import 'project_detail_screen.dart';
 import 'project_form_screen.dart';
 import 'settings_screen.dart';
-import 'widgets/card_menu.dart';
 import 'widgets/confirm_dialog.dart';
+import 'widgets/delete_action.dart';
+import 'widgets/entry_dialog.dart';
 
 /// 앱 첫 화면. 만들어둔 집 찾기 목록들을 보여준다.
 class ProjectListScreen extends StatefulWidget {
@@ -37,9 +37,25 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
     });
   }
 
+  /// 이름부터 팝업으로 받고, 평가 기준은 다음 화면에서 정한다.
+  /// 이름 한 줄과 기준 열두 개를 한 화면에 같이 두면 무게가 안 맞는다.
   Future<void> _openForm() async {
+    final entry = await showDialog<EntryResult>(
+      context: context,
+      builder: (_) => EntryDialog(
+        title: '새 목록',
+        nameHint: '예: 2026 봄 이사',
+        confirmLabel: '다음',
+        nameCheck: (name) async =>
+            await AppDatabase.instance.projectNameExists(name)
+            ? '같은 이름의 목록이 이미 있어요.'
+            : null,
+      ),
+    );
+    if (entry == null || !mounted) return;
+
     await Navigator.of(context).push<void>(
-      MaterialPageRoute(builder: (_) => const ProjectFormScreen()),
+      MaterialPageRoute(builder: (_) => ProjectFormScreen(name: entry.name)),
     );
     await _refresh();
   }
@@ -58,7 +74,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
     await _refresh();
   }
 
-  /// 목록 삭제는 안에 든 게 전부 사라지는 무거운 동작이라 확인을 받는다.
+  /// 목록 삭제는 안에 든 게 전부 사라지는 무거운 동작이라, 두 번 누르기에 더해 확인까지 받는다.
   Future<void> _confirmDelete(Project project) async {
     final ok = await confirmDestructive(
       context,
@@ -69,7 +85,6 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
 
     await AppDatabase.instance.deleteProject(project.id!);
     if (!mounted) return;
-    HapticFeedback.mediumImpact();
     await _refresh();
   }
 
@@ -94,7 +109,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
                       const Expanded(
                         child: ScreenTitle(
                           title: '보러가요',
-                          subtitle: '집은 기억이 아니라 기록으로 고르는 거예요.',
+                          subtitle: '오늘 본 집, 잊기 전에 점수로 남겨요.',
                         ),
                       ),
                       IconButton(
@@ -110,7 +125,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
                     EmptyState(
                       icon: Icons.home_work_outlined,
                       title: '아직 만든 목록이 없어요',
-                      description: '집 보러 나가기 전에 목록을 만들고\n무엇을 볼지 먼저 정해두세요.',
+                      description: '이사 한 번에 목록 하나.\n보러 갈 집을 여기에 모아둡니다.',
                       actionLabel: '첫 목록 만들기',
                       onAction: _openForm,
                     )
@@ -157,13 +172,13 @@ class _ProjectCard extends StatelessWidget {
 
     return AppCard(
       onTap: onTap,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
                   summary.project.name,
                   style: TextStyle(
                     fontSize: 17,
@@ -171,17 +186,17 @@ class _ProjectCard extends StatelessWidget {
                     color: palette.textStrong,
                   ),
                 ),
-              ),
-              CardMenu(onDelete: onDelete),
-            ],
+                const SizedBox(height: 4),
+                Text(
+                  '건물 ${summary.buildingCount}곳 · 방 ${summary.roomCount}칸 · '
+                  '${formatDate(summary.project.createdAt)}',
+                  style: TextStyle(fontSize: 13.5, color: palette.textMuted),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            summary.buildingCount == 0
-                ? '평가 기준 ${summary.criterionCount}개 · 아직 넣은 건물 없음'
-                : '건물 ${summary.buildingCount}곳 · 방 ${summary.roomCount}칸',
-            style: TextStyle(fontSize: 13.5, color: palette.textMuted),
-          ),
+          const SizedBox(width: 8),
+          DeleteAction(onConfirm: onDelete),
         ],
       ),
     );

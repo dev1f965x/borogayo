@@ -4,14 +4,17 @@ import 'package:flutter/services.dart';
 import '../db/database.dart';
 import '../models/models.dart';
 import '../theme.dart';
-import 'building_detail_screen.dart';
+import 'building_list_screen.dart';
 import 'criteria_edit_screen.dart';
 import 'room_detail_screen.dart';
-import 'widgets/card_menu.dart';
-import 'widgets/confirm_dialog.dart';
-import 'widgets/ranking_view.dart';
+import 'widgets/entry_dialog.dart';
+import 'widgets/room_card.dart';
+import 'widgets/room_entry_dialog.dart';
 
-/// 목록 하나. 건물을 쌓아가는 탭과, 방 순위를 보는 탭으로 나뉜다.
+/// 목록 하나. 보러 간 방들이 점수순으로 늘 정렬돼 있는 화면.
+///
+/// 고르는 대상은 건물이 아니라 방이므로, 여기서는 건물을 가로질러 방을 한 줄로 세운다.
+/// 건물은 방들이 공유하는 평가를 담아두는 묶음일 뿐이라 '건물' 화면으로 따로 뺐다.
 class ProjectDetailScreen extends StatefulWidget {
   const ProjectDetailScreen({super.key, required this.project});
 
@@ -21,15 +24,14 @@ class ProjectDetailScreen extends StatefulWidget {
   State<ProjectDetailScreen> createState() => _ProjectDetailScreenState();
 }
 
-class _ProjectDetailScreenState extends State<ProjectDetailScreen>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tabs = TabController(length: 2, vsync: this)
-    ..addListener(() => setState(() {}));
-
-  List<BuildingSummary> _buildings = [];
-  List<RankedRoom> _ranking = [];
+class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
+  List<RoomScore> _rooms = [];
+  List<Building> _buildings = [];
   List<Criterion> _roomCriteria = [];
   bool _loading = true;
+
+  /// 이름을 고칠 수 있으므로 넘겨받은 값을 계속 쓰지 않고 여기서 들고 간다.
+  late String _name = widget.project.name;
 
   int get _projectId => widget.project.id!;
 
@@ -39,117 +41,82 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
     _refresh();
   }
 
-  @override
-  void dispose() {
-    _tabs.dispose();
-    super.dispose();
-  }
-
   Future<void> _refresh() async {
     final db = AppDatabase.instance;
+    final rooms = await db.readRoomBoard(_projectId);
     final buildings = await db.readBuildingSummaries(_projectId);
-    final ranking = await db.readRanking(_projectId);
     final roomCriteria = await db.readCriteria(_projectId, scope: CriterionScope.room);
     if (!mounted) return;
     setState(() {
-      _buildings = buildings;
-      _ranking = ranking;
+      _rooms = rooms;
+      _buildings = buildings.map((summary) => summary.building).toList();
       _roomCriteria = roomCriteria;
       _loading = false;
     });
   }
 
-  /// 건물과 첫 방을 한 번에 받는다. 원룸처럼 방이 하나뿐인 경우가 흔해서,
-  /// 건물만 만들고 방을 또 추가하게 하면 번거롭다.
-  Future<void> _addBuilding() async {
-    final nameController = TextEditingController();
-    final memoController = TextEditingController();
-    final roomController = TextEditingController();
-
-    final saved = await showDialog<bool>(
+  /// 방을 하나 더 본다는 게 곧 매물을 하나 더 넣는다는 뜻이라, 여기서 건물까지 같이 고른다.
+  /// 건물이 아직 없으면 다이얼로그 안에서 바로 만든다.
+  Future<void> _addRoom() async {
+    final entry = await showDialog<RoomEntryResult>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('건물 추가'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              autofocus: true,
-              textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(hintText: '건물 · 예: 역삼동 대성빌라'),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: memoController,
-              textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(hintText: '메모 (선택) · 예: 역 도보 8분'),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: roomController,
-              textInputAction: TextInputAction.done,
-              onSubmitted: (_) => Navigator.pop(context, true),
-              decoration: const InputDecoration(hintText: '첫 방 (선택) · 예: 302호'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('취소'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: FilledButton.styleFrom(minimumSize: const Size(88, 44)),
-            child: const Text('추가'),
-          ),
-        ],
-      ),
+      builder: (_) => RoomEntryDialog(projectId: _projectId, buildings: _buildings),
     );
+    if (entry == null || !mounted) return;
 
-    final name = nameController.text.trim();
-    final memo = memoController.text.trim();
-    final room = roomController.text.trim();
-    nameController.dispose();
-    memoController.dispose();
-    roomController.dispose();
+    final db = AppDatabase.instance;
+    final buildingId =
+        entry.buildingId ??
+        await db.createBuilding(_projectId, entry.newBuildingName!, null);
+    final roomId = await db.createRoom(buildingId, entry.roomName, entry.memo);
 
-    if (saved != true || name.isEmpty) return;
-
-    final buildingId = await AppDatabase.instance.createBuilding(
-      _projectId,
-      name,
-      memo.isEmpty ? null : memo,
-      firstRoomName: room.isEmpty ? null : room,
-    );
-    if (!mounted) return;
     HapticFeedback.lightImpact();
     await _refresh();
     if (!mounted) return;
 
-    // 방금 만든 건물로 바로 들어간다. 현장에서는 추가 직후 곧바로 채점하게 되므로
-    // 목록으로 돌아갔다가 다시 눌러 들어가는 단계를 없앤다.
-    final created = _buildings
-        .where((summary) => summary.building.id == buildingId)
-        .firstOrNull;
-    if (created != null) await _openBuilding(created.building);
+    // 방을 추가한 직후엔 곧바로 채점하게 되므로 바로 그 화면으로 넘어간다.
+    final created = _rooms.where((item) => item.room.id == roomId).firstOrNull;
+    if (created != null) await _openRoom(created);
   }
 
-  Future<void> _openBuilding(Building building) async {
+  Future<void> _openRoom(RoomScore entry) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
-        builder: (_) => BuildingDetailScreen(project: widget.project, building: building),
+        builder: (_) => RoomDetailScreen(
+          room: entry.room,
+          building: entry.building,
+          criteria: _roomCriteria,
+        ),
       ),
     );
     await _refresh();
   }
 
-  Future<void> _openRoom(Room room) async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => RoomDetailScreen(room: room, criteria: _roomCriteria),
+  Future<void> _rename() async {
+    final entry = await showDialog<EntryResult>(
+      context: context,
+      builder: (_) => EntryDialog(
+        title: '목록 이름',
+        nameHint: '예: 2026 봄 이사',
+        confirmLabel: '저장',
+        initialName: _name,
+        nameCheck: (name) async =>
+            await AppDatabase.instance.projectNameExists(name, exceptId: _projectId)
+            ? '같은 이름의 목록이 이미 있어요.'
+            : null,
       ),
+    );
+    if (entry == null || !mounted) return;
+
+    await AppDatabase.instance.renameProject(_projectId, entry.name);
+    if (!mounted) return;
+    HapticFeedback.lightImpact();
+    setState(() => _name = entry.name);
+  }
+
+  Future<void> _openBuildings() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => BuildingListScreen(project: widget.project)),
     );
     await _refresh();
   }
@@ -161,29 +128,45 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
     await _refresh();
   }
 
-  /// 건물을 지우면 그 안의 방·점수·사진이 전부 사라지므로 확인을 받는다.
-  Future<void> _confirmDeleteBuilding(Building building) async {
-    final ok = await confirmDestructive(
-      context,
-      title: '‘${building.name}’ 삭제',
-      message: '이 건물의 방과 점수, 사진·영상이 모두 지워집니다.',
-    );
-    if (!ok || !mounted) return;
+  /// 방 삭제는 자주 일어나고 되돌리기 쉬우므로 확인 대신 실행취소를 제공한다.
+  Future<void> _deleteRoom(Room room) async {
+    final snapshot = await AppDatabase.instance.deleteRoom(room.id!);
+    if (!mounted || snapshot == null) return;
 
-    await AppDatabase.instance.deleteBuilding(building.id!);
-    if (!mounted) return;
-    HapticFeedback.mediumImpact();
     await _refresh();
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('‘${room.name}’ 삭제했어요'),
+          action: SnackBarAction(
+            label: '실행취소',
+            textColor: context.palette.brand,
+            onPressed: () async {
+              await AppDatabase.instance.restoreRoom(snapshot);
+              await _refresh();
+            },
+          ),
+        ),
+      );
   }
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final anyScore = _rooms.any((entry) => entry.hasScore);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.project.name),
+        title: Text(_name),
         actions: [
+          IconButton(
+            onPressed: _rename,
+            icon: const Icon(Icons.edit_outlined, size: 20),
+            tooltip: '목록 이름 수정',
+          ),
           TextButton.icon(
             onPressed: _editCriteria,
             icon: const Icon(Icons.tune, size: 18),
@@ -191,199 +174,99 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
           ),
           const SizedBox(width: 8),
         ],
-        bottom: TabBar(
-          controller: _tabs,
-          labelColor: palette.textStrong,
-          unselectedLabelColor: palette.textMuted,
-          indicatorColor: palette.brand,
-          indicatorSize: TabBarIndicatorSize.tab,
-          dividerColor: palette.border,
-          labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-          tabs: const [Tab(text: '건물'), Tab(text: '순위')],
-        ),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : TabBarView(
-              controller: _tabs,
+          : ListView(
+              padding: EdgeInsets.fromLTRB(
+                AppSpacing.page,
+                12,
+                AppSpacing.page,
+                120 + MediaQuery.paddingOf(context).bottom,
+              ),
               children: [
-                _BuildingList(
-                  buildings: _buildings,
-                  ranking: _ranking,
-                  onOpen: _openBuilding,
-                  onDelete: _confirmDeleteBuilding,
-                  onAdd: _addBuilding,
+                _Header(
+                  buildingCount: _buildings.length,
+                  roomCount: _rooms.length,
+                  sorted: anyScore,
+                  onOpenBuildings: _openBuildings,
                 ),
-                RankingView(
-                  ranking: _ranking,
-                  onOpenRoom: (entry) => _openRoom(entry.room),
-                ),
+                const SizedBox(height: 16),
+                for (var index = 0; index < _rooms.length; index++) ...[
+                  RoomCard(
+                    entry: _rooms[index],
+                    // 점수가 나온 방만 등수를 받는다. 정렬이 그들을 앞에 모아두므로
+                    // 위에서부터 센 번호가 그대로 등수가 된다.
+                    rank: _rooms[index].hasScore ? index + 1 : null,
+                    showRank: true,
+                    showBuilding: true,
+                    onTap: () => _openRoom(_rooms[index]),
+                    onDelete: () => _deleteRoom(_rooms[index].room),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                if (_rooms.isEmpty)
+                  Text(
+                    '아직 넣은 방이 없어요',
+                    style: TextStyle(fontSize: 13.5, color: palette.textMuted),
+                  ),
               ],
             ),
-      floatingActionButton: _tabs.index != 0 || _buildings.isEmpty || _loading
+      floatingActionButton: _loading
           ? null
           : FloatingActionButton.extended(
-              onPressed: _addBuilding,
+              onPressed: _addRoom,
               backgroundColor: palette.brand,
               foregroundColor: Colors.white,
               elevation: 0,
               icon: const Icon(Icons.add),
-              label: const Text('건물 추가', style: TextStyle(fontWeight: FontWeight.w600)),
+              label: const Text('방 추가', style: TextStyle(fontWeight: FontWeight.w600)),
             ),
     );
   }
 }
 
-class _BuildingList extends StatelessWidget {
-  const _BuildingList({
-    required this.buildings,
-    required this.ranking,
-    required this.onOpen,
-    required this.onDelete,
-    required this.onAdd,
+/// 집계 한 줄과 건물 화면으로 가는 길. 건물은 앱바에 두기엔 자주 쓰지 않고,
+/// 아예 숨기면 공통 평가를 매기러 갈 방법이 없어져서 목록 머리에 얹었다.
+class _Header extends StatelessWidget {
+  const _Header({
+    required this.buildingCount,
+    required this.roomCount,
+    required this.sorted,
+    required this.onOpenBuildings,
   });
 
-  final List<BuildingSummary> buildings;
-  final List<RankedRoom> ranking;
-  final void Function(Building building) onOpen;
-  final void Function(Building building) onDelete;
-  final VoidCallback onAdd;
+  final int buildingCount;
+  final int roomCount;
+  final bool sorted;
+  final VoidCallback onOpenBuildings;
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final roomTotal = buildings.fold<int>(0, (sum, b) => sum + b.roomCount);
 
-    // 건물 카드에 "이 건물에서 가장 좋았던 방" 점수를 얹어준다.
-    final bestByBuilding = <int, RankedRoom>{};
-    for (final entry in ranking) {
-      if (!entry.hasAnyScore) continue;
-      final current = bestByBuilding[entry.building.id];
-      if (current == null || entry.percent > current.percent) {
-        bestByBuilding[entry.building.id!] = entry;
-      }
-    }
-
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(AppSpacing.page, 12, AppSpacing.page, 120),
+    return Row(
       children: [
-        Text(
-          buildings.isEmpty
-              ? '건물을 추가하고, 그 안에 본 방을 넣으세요'
-              : '건물 ${buildings.length}곳 · 방 $roomTotal칸',
-          style: TextStyle(fontSize: 13.5, color: palette.textMuted),
+        Expanded(
+          child: Text(
+            roomCount == 0
+                ? '방을 추가하면 점수순으로 쌓입니다'
+                : '방 $roomCount칸 · 건물 $buildingCount곳${sorted ? ' · 점수순' : ''}',
+            style: TextStyle(fontSize: 13.5, color: palette.textMuted),
+          ),
         ),
-        const SizedBox(height: 16),
-        if (buildings.isEmpty)
-          EmptyState(
-            icon: Icons.apartment_outlined,
-            title: '아직 넣은 건물이 없어요',
-            description: '같은 건물의 방을 여러 개 볼 수 있어서\n건물로 먼저 묶습니다.',
-            actionLabel: '첫 건물 추가하기',
-            onAction: onAdd,
-          )
-        else
-          for (final summary in buildings) ...[
-            _BuildingCard(
-              summary: summary,
-              best: bestByBuilding[summary.building.id],
-              onTap: () => onOpen(summary.building),
-              onDelete: () => onDelete(summary.building),
-            ),
-            const SizedBox(height: 12),
-          ],
+        TextButton.icon(
+          onPressed: onOpenBuildings,
+          icon: const Icon(Icons.apartment_outlined, size: 17),
+          label: const Text('건물'),
+          style: TextButton.styleFrom(
+            foregroundColor: palette.brand,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            minimumSize: const Size(0, 36),
+            textStyle: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
+          ),
+        ),
       ],
-    );
-  }
-}
-
-class _BuildingCard extends StatelessWidget {
-  const _BuildingCard({
-    required this.summary,
-    required this.best,
-    required this.onTap,
-    required this.onDelete,
-  });
-
-  final BuildingSummary summary;
-  final RankedRoom? best;
-  final VoidCallback onTap;
-  final VoidCallback onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    final building = summary.building;
-
-    return AppCard(
-      onTap: onTap,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  building.name,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: palette.textStrong,
-                  ),
-                ),
-              ),
-              if (best != null) ...[
-                Text(
-                  '최고 ${best!.percent.toStringAsFixed(0)}점',
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                    color: palette.brand,
-                  ),
-                ),
-                const SizedBox(width: 4),
-              ],
-              CardMenu(onDelete: onDelete),
-            ],
-          ),
-          if (building.memo != null && building.memo!.isNotEmpty) ...[
-            const SizedBox(height: 2),
-            Text(
-              building.memo!,
-              style: TextStyle(fontSize: 13.5, color: palette.textMuted),
-            ),
-          ],
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Icon(Icons.meeting_room_outlined, size: 15, color: palette.textMuted),
-              const SizedBox(width: 4),
-              Text(
-                '방 ${summary.roomCount}칸',
-                style: TextStyle(fontSize: 12.5, color: palette.textMuted),
-              ),
-              const SizedBox(width: 12),
-              Icon(
-                summary.buildingScoringDone
-                    ? Icons.check_circle_outline
-                    : Icons.checklist_outlined,
-                size: 15,
-                color: summary.buildingScoringDone ? palette.done : palette.textMuted,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                summary.buildingScoringDone
-                    ? '건물 채점 완료'
-                    : '건물 기준 ${summary.buildingCriterionCount}개 중 ${summary.buildingScoredCount}개',
-                style: TextStyle(
-                  fontSize: 12.5,
-                  color: summary.buildingScoringDone ? palette.done : palette.textMuted,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
     );
   }
 }

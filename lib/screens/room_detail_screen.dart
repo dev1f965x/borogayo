@@ -6,14 +6,24 @@ import '../models/models.dart';
 import '../models/scoring.dart';
 import '../theme.dart';
 import 'widgets/confirm_dialog.dart';
+import 'widgets/entry_dialog.dart';
 import 'widgets/criterion_score_card.dart';
 import 'widgets/media_section.dart';
 
 /// 방 하나를 방 평가 기준대로 채점하고, 사진·영상을 붙인다.
 class RoomDetailScreen extends StatefulWidget {
-  const RoomDetailScreen({super.key, required this.room, required this.criteria});
+  const RoomDetailScreen({
+    super.key,
+    required this.room,
+    required this.building,
+    required this.criteria,
+  });
 
   final Room room;
+
+  /// 사진을 공유할 때 "어느 건물의 방인지"까지 붙여야 받는 쪽이 알아본다.
+  final Building building;
+
   final List<Criterion> criteria;
 
   @override
@@ -26,6 +36,9 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
   bool _loading = true;
   bool _saving = false;
 
+  /// 이름·메모를 고칠 수 있으므로 넘겨받은 값을 계속 쓰지 않고 여기서 들고 간다.
+  late Room _room = widget.room;
+
   bool get _hasUnsavedChanges => !_loading && _draft.isDirty;
 
   @override
@@ -35,7 +48,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
   }
 
   Future<void> _load() async {
-    final values = await AppDatabase.instance.readRoomScores(widget.room.id!);
+    final values = await AppDatabase.instance.readRoomScores(_room.id!);
     if (!mounted) return;
     setState(() {
       _draft = ScoreDraft(values);
@@ -46,10 +59,52 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
   Future<void> _save() async {
     if (_saving) return;
     setState(() => _saving = true);
-    await AppDatabase.instance.saveRoomScores(widget.room.id!, _draft.values);
+    await AppDatabase.instance.saveRoomScores(_room.id!, _draft.values);
     if (!mounted) return;
     HapticFeedback.mediumImpact();
-    Navigator.of(context).pop();
+    setState(() {
+      _draft.markSaved();
+      _saving = false;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('방 점수를 저장했어요')),
+    );
+  }
+
+  Future<void> _editRoom() async {
+    final entry = await showDialog<EntryResult>(
+      context: context,
+      builder: (_) => EntryDialog(
+        title: '방 수정',
+        nameHint: '예: 302호',
+        memoHint: '메모 (선택) · 예: 65/50, 남향',
+        confirmLabel: '저장',
+        initialName: _room.name,
+        initialMemo: _room.memo,
+        nameCheck: (name) async =>
+            await AppDatabase.instance.roomNameExists(
+              _room.buildingId,
+              name,
+              exceptId: _room.id,
+            )
+            ? '이 건물에 같은 이름의 방이 있어요.'
+            : null,
+      ),
+    );
+    if (entry == null || !mounted) return;
+
+    await AppDatabase.instance.updateRoom(_room.id!, entry.name, entry.memo);
+    if (!mounted) return;
+    HapticFeedback.lightImpact();
+    setState(() {
+      _room = Room(
+        id: _room.id,
+        buildingId: _room.buildingId,
+        name: entry.name,
+        memo: entry.memo,
+        createdAt: _room.createdAt,
+      );
+    });
   }
 
   @override
@@ -67,20 +122,48 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
         Navigator.of(context).pop();
       },
       child: Scaffold(
-        appBar: AppBar(title: Text(widget.room.name)),
+        appBar: AppBar(
+          title: Text(_room.name),
+          actions: [
+            IconButton(
+              onPressed: _editRoom,
+              icon: const Icon(Icons.edit_outlined, size: 20),
+              tooltip: '방 수정',
+            ),
+            // 건물 채점과 같은 자리에 같은 모양으로. 스크롤을 내려도 계속 보인다.
+            if (_hasUnsavedChanges)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: FilledButton(
+                  onPressed: _saving ? null : _save,
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(64, 36),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    textStyle: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  child: const Text('저장'),
+                ),
+              ),
+          ],
+        ),
         body: _loading
             ? const Center(child: CircularProgressIndicator())
             : ListView(
-                padding: const EdgeInsets.fromLTRB(
+                padding: EdgeInsets.fromLTRB(
                   AppSpacing.page,
                   8,
                   AppSpacing.page,
-                  24,
+                  // 하단 저장 바를 앱바로 옮기면서 화면 맨 아래를 가려주던 것이 없어졌다.
+                  // 제스처 바 높이만큼 더 띄우지 않으면 마지막 카드가 잘린다.
+                  32 + MediaQuery.paddingOf(context).bottom,
                 ),
                 children: [
-                  if (widget.room.memo != null && widget.room.memo!.isNotEmpty) ...[
+                  if (_room.memo != null && _room.memo!.isNotEmpty) ...[
                     Text(
-                      widget.room.memo!,
+                      _room.memo!,
                       style: TextStyle(fontSize: 13.5, color: palette.textMuted),
                     ),
                     const SizedBox(height: 14),
@@ -121,33 +204,14 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
                         value: _draft.valueOf(criterion.id!),
                         onChanged: (value) =>
                             setState(() => _draft.set(criterion.id!, value)),
+                        onCleared: () => setState(() => _draft.clear(criterion.id!)),
                       ),
                       const SizedBox(height: 10),
                     ],
                   const SizedBox(height: 20),
-                  MediaSection(roomId: widget.room.id),
+                  MediaSection(building: widget.building, room: _room),
                 ],
               ),
-        bottomNavigationBar: Container(
-          decoration: BoxDecoration(
-            color: palette.background,
-            border: Border(top: BorderSide(color: palette.border)),
-          ),
-          child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.page,
-                12,
-                AppSpacing.page,
-                12,
-              ),
-              child: FilledButton(
-                onPressed: _loading || _saving ? null : _save,
-                child: Text(_hasUnsavedChanges ? '저장' : '저장됨'),
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }

@@ -4,66 +4,93 @@ import 'package:flutter/services.dart';
 import '../db/database.dart';
 import '../models/models.dart';
 import '../theme.dart';
+import 'widgets/criterion_composer.dart';
 
 /// 집 볼 때 흔히 확인하는 것들. 빈 화면에서 시작하지 않도록 미리 채워둔다.
 ///
 /// 건물 항목은 같은 건물의 방 여러 개를 봐도 한 번만 매기면 되는 것들이고,
 /// 방 항목은 방마다 달라지는 것들이다.
 const _presets = <CriterionDraft>[
-  (name: '교통', scope: CriterionScope.building, type: CriterionType.scale),
-  (name: '주변 편의시설', scope: CriterionScope.building, type: CriterionType.scale),
-  (name: '건물 관리 상태', scope: CriterionScope.building, type: CriterionType.scale),
-  (name: '주차 가능', scope: CriterionScope.building, type: CriterionType.binary),
-  (name: '엘리베이터', scope: CriterionScope.building, type: CriterionType.binary),
-  (name: '채광', scope: CriterionScope.room, type: CriterionType.scale),
-  (name: '소음', scope: CriterionScope.room, type: CriterionType.scale),
-  (name: '수압', scope: CriterionScope.room, type: CriterionType.scale),
-  (name: '곰팡이·결로', scope: CriterionScope.room, type: CriterionType.scale),
-  (name: '방 크기', scope: CriterionScope.room, type: CriterionType.scale),
-  (name: '가격', scope: CriterionScope.room, type: CriterionType.scale),
-  (name: '풀옵션', scope: CriterionScope.room, type: CriterionType.binary),
+  (name: '교통', scope: CriterionScope.building, type: CriterionType.scale, emoji: '🚇'),
+  (
+    name: '주변 편의시설',
+    scope: CriterionScope.building,
+    type: CriterionType.scale,
+    emoji: '🏪',
+  ),
+  (
+    name: '건물 관리 상태',
+    scope: CriterionScope.building,
+    type: CriterionType.scale,
+    emoji: '🧹',
+  ),
+  (
+    name: '주차 가능',
+    scope: CriterionScope.building,
+    type: CriterionType.binary,
+    emoji: '🅿️',
+  ),
+  (
+    name: '엘리베이터',
+    scope: CriterionScope.building,
+    type: CriterionType.binary,
+    emoji: '🛗',
+  ),
+  (name: '채광', scope: CriterionScope.room, type: CriterionType.scale, emoji: '☀️'),
+  (name: '소음', scope: CriterionScope.room, type: CriterionType.scale, emoji: '🔊'),
+  (name: '수압', scope: CriterionScope.room, type: CriterionType.scale, emoji: '🚿'),
+  (name: '곰팡이·결로', scope: CriterionScope.room, type: CriterionType.scale, emoji: '💧'),
+  (name: '방 크기', scope: CriterionScope.room, type: CriterionType.scale, emoji: '📐'),
+  (name: '가격', scope: CriterionScope.room, type: CriterionType.scale, emoji: '💰'),
+  (name: '풀옵션', scope: CriterionScope.room, type: CriterionType.binary, emoji: '🛋️'),
 ];
 
-/// 새 목록 만들기. 이름과 평가 기준을 함께 정한다.
+/// 새 목록의 평가 기준을 정하는 화면. 이름은 앞선 팝업에서 이미 받았다.
+///
+/// 건물용과 방용을 위아래로 이어 붙이면 둘 다 스크롤 밖으로 밀려 어느 쪽을 보고 있는지
+/// 헷갈린다. 탭으로 나눠 한 번에 한 쪽만 보게 한다.
 class ProjectFormScreen extends StatefulWidget {
-  const ProjectFormScreen({super.key});
+  const ProjectFormScreen({super.key, required this.name});
+
+  final String name;
 
   @override
   State<ProjectFormScreen> createState() => _ProjectFormScreenState();
 }
 
-class _ProjectFormScreenState extends State<ProjectFormScreen> {
-  final _nameController = TextEditingController();
+class _ProjectFormScreenState extends State<ProjectFormScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabs = TabController(length: 2, vsync: this);
   final _criteria = <CriterionDraft>[..._presets];
+
   bool _saving = false;
 
   @override
   void dispose() {
-    _nameController.dispose();
+    _tabs.dispose();
     super.dispose();
   }
 
-  void _add(String name, CriterionScope scope, CriterionType type) {
-    final trimmed = name.trim();
-    if (trimmed.isEmpty) return;
+  List<CriterionDraft> _of(CriterionScope scope) =>
+      _criteria.where((c) => c.scope == scope).toList();
 
-    if (_criteria.any((c) => c.name == trimmed)) {
+  void _add(CriterionDraft draft) {
+    if (_criteria.any((c) => c.name == draft.name)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('‘$trimmed’은(는) 이미 있어요')),
+        SnackBar(content: Text('‘${draft.name}’은(는) 이미 있어요')),
       );
       return;
     }
 
     HapticFeedback.lightImpact();
-    setState(() => _criteria.add((name: trimmed, scope: scope, type: type)));
+    setState(() => _criteria.add(draft));
   }
 
   Future<void> _save() async {
-    final name = _nameController.text.trim();
-    if (name.isEmpty || _criteria.isEmpty || _saving) return;
+    if (_criteria.isEmpty || _saving) return;
 
     setState(() => _saving = true);
-    await AppDatabase.instance.createProject(name, _criteria);
+    await AppDatabase.instance.createProject(widget.name, _criteria);
     if (!mounted) return;
     HapticFeedback.mediumImpact();
     Navigator.of(context).pop();
@@ -72,49 +99,39 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final canSave = _nameController.text.trim().isNotEmpty && _criteria.isNotEmpty;
 
     return Scaffold(
-      appBar: AppBar(),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(AppSpacing.page, 8, AppSpacing.page, 24),
+      appBar: AppBar(
+        title: Text(widget.name),
+        bottom: TabBar(
+          controller: _tabs,
+          labelColor: palette.textStrong,
+          unselectedLabelColor: palette.textMuted,
+          indicatorColor: palette.brand,
+          indicatorSize: TabBarIndicatorSize.tab,
+          dividerColor: palette.border,
+          labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          tabs: [
+            Tab(text: '건물 기준 ${_of(CriterionScope.building).length}'),
+            Tab(text: '방 기준 ${_of(CriterionScope.room).length}'),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabs,
         children: [
-          const ScreenTitle(
-            title: '새 목록',
-            subtitle: '이사 한 번에 목록 하나. 무엇을 볼지 먼저 정해요.',
-          ),
-          const SizedBox(height: 28),
-          Text(
-            '목록 이름',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: palette.textStrong,
-            ),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _nameController,
-            textInputAction: TextInputAction.done,
-            decoration: const InputDecoration(hintText: '예: 2026 봄 이사'),
-            onChanged: (_) => setState(() {}),
-          ),
-          const SizedBox(height: 28),
-          _CriteriaSection(
+          _CriteriaTab(
             scope: CriterionScope.building,
-            title: '건물 평가 기준',
-            description: '같은 건물이면 방이 달라도 똑같은 항목. 건물마다 한 번만 매깁니다.',
-            criteria: _criteria.where((c) => c.scope == CriterionScope.building).toList(),
-            onAdd: (name, type) => _add(name, CriterionScope.building, type),
+            description: '같은 건물이면 방이 달라도 똑같은 항목.\n건물마다 한 번만 매깁니다.',
+            criteria: _of(CriterionScope.building),
+            onAdd: _add,
             onRemove: (draft) => setState(() => _criteria.remove(draft)),
           ),
-          const SizedBox(height: 28),
-          _CriteriaSection(
+          _CriteriaTab(
             scope: CriterionScope.room,
-            title: '방 평가 기준',
             description: '같은 건물 안에서도 방마다 달라지는 항목.',
-            criteria: _criteria.where((c) => c.scope == CriterionScope.room).toList(),
-            onAdd: (name, type) => _add(name, CriterionScope.room, type),
+            criteria: _of(CriterionScope.room),
+            onAdd: _add,
             onRemove: (draft) => setState(() => _criteria.remove(draft)),
           ),
         ],
@@ -133,7 +150,7 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
               12,
             ),
             child: FilledButton(
-              onPressed: canSave && !_saving ? _save : null,
+              onPressed: _criteria.isNotEmpty && !_saving ? _save : null,
               child: const Text('만들기'),
             ),
           ),
@@ -143,10 +160,9 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
   }
 }
 
-class _CriteriaSection extends StatefulWidget {
-  const _CriteriaSection({
+class _CriteriaTab extends StatelessWidget {
+  const _CriteriaTab({
     required this.scope,
-    required this.title,
     required this.description,
     required this.criteria,
     required this.onAdd,
@@ -154,49 +170,20 @@ class _CriteriaSection extends StatefulWidget {
   });
 
   final CriterionScope scope;
-  final String title;
   final String description;
   final List<CriterionDraft> criteria;
-  final void Function(String name, CriterionType type) onAdd;
+  final void Function(CriterionDraft draft) onAdd;
   final ValueChanged<CriterionDraft> onRemove;
-
-  @override
-  State<_CriteriaSection> createState() => _CriteriaSectionState();
-}
-
-class _CriteriaSectionState extends State<_CriteriaSection> {
-  final _controller = TextEditingController();
-  CriterionType _type = CriterionType.scale;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    widget.onAdd(_controller.text, _type);
-    _controller.clear();
-  }
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(AppSpacing.page, 16, AppSpacing.page, 24),
       children: [
         Text(
-          widget.title,
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
-            color: palette.textStrong,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          widget.description,
+          description,
           style: TextStyle(fontSize: 13, color: palette.textMuted, height: 1.4),
         ),
         const SizedBox(height: 14),
@@ -208,7 +195,7 @@ class _CriteriaSectionState extends State<_CriteriaSection> {
             borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
             border: Border.all(color: palette.border),
           ),
-          child: widget.criteria.isEmpty
+          child: criteria.isEmpty
               ? Text(
                   '항목을 하나 이상 추가해주세요.',
                   style: TextStyle(fontSize: 13.5, color: palette.textMuted),
@@ -217,12 +204,14 @@ class _CriteriaSectionState extends State<_CriteriaSection> {
                   spacing: 8,
                   runSpacing: 2,
                   children: [
-                    for (final draft in widget.criteria)
+                    for (final draft in criteria)
                       InputChip(
                         label: Text(
-                          draft.type == CriterionType.binary
-                              ? '${draft.name} · 있음/없음'
-                              : draft.name,
+                          [
+                            ?draft.emoji,
+                            draft.name,
+                            if (draft.type == CriterionType.binary) '· 여부형',
+                          ].join(' '),
                         ),
                         labelStyle: TextStyle(fontSize: 13.5, color: palette.textBody),
                         backgroundColor: palette.background,
@@ -234,64 +223,14 @@ class _CriteriaSectionState extends State<_CriteriaSection> {
                         deleteIconColor: palette.textMuted,
                         onDeleted: () {
                           HapticFeedback.selectionClick();
-                          widget.onRemove(draft);
+                          onRemove(draft);
                         },
                       ),
                   ],
                 ),
         ),
         const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _controller,
-                textInputAction: TextInputAction.done,
-                decoration: const InputDecoration(hintText: '항목 직접 추가'),
-                onSubmitted: (_) => _submit(),
-              ),
-            ),
-            const SizedBox(width: 8),
-            SizedBox(
-              width: 52,
-              height: 52,
-              child: IconButton.filled(
-                onPressed: _submit,
-                style: IconButton.styleFrom(
-                  backgroundColor: palette.brand,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                icon: const Icon(Icons.add),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        // 새로 추가할 항목을 점수(0~10)로 매길지, 있음/없음으로 매길지.
-        Row(
-          children: [
-            for (final type in CriterionType.values)
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: ChoiceChip(
-                  label: Text(type == CriterionType.scale ? '0~10 점수' : '있음/없음'),
-                  labelStyle: TextStyle(
-                    fontSize: 12.5,
-                    color: _type == type ? Colors.white : palette.textMuted,
-                  ),
-                  selected: _type == type,
-                  showCheckmark: false,
-                  backgroundColor: palette.surface,
-                  selectedColor: palette.brand,
-                  side: BorderSide(color: palette.border),
-                  onSelected: (_) => setState(() => _type = type),
-                ),
-              ),
-          ],
-        ),
+        CriterionComposer(scope: scope, onAdd: onAdd),
       ],
     );
   }

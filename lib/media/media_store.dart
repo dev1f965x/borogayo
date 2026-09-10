@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:get_thumbnail_video/index.dart';
+import 'package:get_thumbnail_video/video_thumbnail.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -26,6 +28,27 @@ class MediaStore {
     final target = p.join(dir.path, name);
     await File(sourcePath).copy(target);
     return target;
+  }
+
+  /// 영상의 첫 장면을 뽑아 이미지로 저장한다.
+  ///
+  /// 목록에서 매번 영상을 열어 프레임을 꺼내면 느리고 배터리도 먹는다.
+  /// 추가할 때 한 번만 만들어두고 그 뒤로는 사진처럼 그린다.
+  /// 코덱을 못 읽는 파일도 있으므로 실패하면 null — 그때는 재생 아이콘만 보여준다.
+  static Future<String?> saveVideoThumbnail(String videoPath) async {
+    try {
+      final dir = await _mediaDir();
+      final file = await VideoThumbnail.thumbnailFile(
+        video: videoPath,
+        thumbnailPath: dir.path,
+        imageFormat: ImageFormat.JPEG,
+        maxWidth: 512,
+        quality: 70,
+      );
+      return file.path;
+    } on Exception {
+      return null;
+    }
   }
 
   static Future<void> delete(String path) async {

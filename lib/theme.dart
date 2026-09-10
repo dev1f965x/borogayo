@@ -112,6 +112,20 @@ class AppSpacing {
   static const cardRadius = 16.0;
 }
 
+/// 1·2·3위에 얹는 색. 금·은·동.
+const kMedalColors = <Color>[
+  Color(0xFFD4A017),
+  Color(0xFF9AA0A6),
+  Color(0xFFB87333),
+];
+
+/// 카드에 얹는 날짜. 요일이나 시각까지는 필요 없고 "언제 만든 것인지"만 보면 된다.
+String formatDate(DateTime value) {
+  final month = value.month.toString().padLeft(2, '0');
+  final day = value.day.toString().padLeft(2, '0');
+  return '${value.year}.$month.$day';
+}
+
 const _seedColor = Color(0xFF7B6A8D);
 
 ThemeData buildAppTheme(Brightness brightness) {
@@ -230,15 +244,26 @@ class ScreenTitle extends StatelessWidget {
 
 /// 목록에서 반복적으로 쓰는 카드 껍데기.
 class AppCard extends StatelessWidget {
-  const AppCard({super.key, required this.child, this.onTap, this.onLongPress});
+  const AppCard({
+    super.key,
+    required this.child,
+    this.onTap,
+    this.onLongPress,
+    this.borderColor,
+  });
 
   final Widget child;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
 
+  /// 상위권 카드처럼 눈에 띄어야 할 때만 넣는다. 없으면 기본 테두리.
+  final Color? borderColor;
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final accented = borderColor != null;
+
     return Material(
       color: palette.surface,
       borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
@@ -248,7 +273,10 @@ class AppCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
         child: Container(
           decoration: BoxDecoration(
-            border: Border.all(color: palette.border),
+            border: Border.all(
+              color: borderColor ?? palette.border,
+              width: accented ? 1.4 : 1,
+            ),
             borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
           ),
           padding: const EdgeInsets.all(16),

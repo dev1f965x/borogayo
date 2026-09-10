@@ -5,7 +5,12 @@ import '../models/models.dart';
 import '../models/scoring.dart';
 
 /// 새 평가 기준을 만들 때 넘기는 값 묶음. 아직 id가 없는 상태를 나타낸다.
-typedef CriterionDraft = ({String name, CriterionScope scope, CriterionType type});
+typedef CriterionDraft = ({
+  String name,
+  CriterionScope scope,
+  CriterionType type,
+  String? emoji,
+});
 
 /// 지운 방을 되돌리기 위해 잠깐 들고 있는 사본. 저장되지 않는다.
 class RoomSnapshot {
@@ -34,7 +39,7 @@ class AppDatabase {
     final path = join(await getDatabasesPath(), 'borogayo.db');
     return openDatabase(
       path,
-      version: 3,
+      version: 4,
       onConfigure: (db) async {
         // 상위를 지우면 하위(방·점수·미디어)도 같이 지워지도록.
         await db.execute('PRAGMA foreign_keys = ON');
@@ -60,9 +65,13 @@ class AppDatabase {
           await _createSchema(db);
           return;
         }
+        // 여기서부터는 컬럼만 느는 변경이라 데이터를 지킨다.
         if (oldVersion < 3) {
-          // 사진·영상에 구역 라벨이 붙었다. 컬럼만 늘면 되므로 데이터를 지킨다.
           await db.execute('ALTER TABLE media ADD COLUMN label TEXT');
+        }
+        if (oldVersion < 4) {
+          await db.execute('ALTER TABLE criteria ADD COLUMN emoji TEXT');
+          await db.execute('ALTER TABLE media ADD COLUMN thumb_path TEXT');
         }
       },
     );
@@ -84,7 +93,8 @@ class AppDatabase {
         scope TEXT NOT NULL,
         type TEXT NOT NULL,
         weight INTEGER NOT NULL DEFAULT 3,
-        position INTEGER NOT NULL DEFAULT 0
+        position INTEGER NOT NULL DEFAULT 0,
+        emoji TEXT
       )
     ''');
     await db.execute('''
@@ -133,6 +143,7 @@ class AppDatabase {
         path TEXT NOT NULL,
         kind TEXT NOT NULL,
         label TEXT,
+        thumb_path TEXT,
         created_at TEXT NOT NULL,
         CHECK ((building_id IS NULL) <> (room_id IS NULL))
       )
@@ -146,7 +157,6 @@ class AppDatabase {
     final rows = await db.rawQuery('''
       SELECT
         p.id, p.name, p.created_at,
-        (SELECT COUNT(*) FROM criteria c WHERE c.project_id = p.id) AS criterion_count,
         (SELECT COUNT(*) FROM buildings b WHERE b.project_id = p.id) AS building_count,
         (SELECT COUNT(*) FROM rooms r
            JOIN buildings b2 ON b2.id = r.building_id
@@ -159,7 +169,6 @@ class AppDatabase {
         .map(
           (row) => ProjectSummary(
             project: Project.fromMap(row),
-            criterionCount: row['criterion_count'] as int,
             buildingCount: row['building_count'] as int,
             roomCount: row['room_count'] as int,
           ),
@@ -184,10 +193,16 @@ class AppDatabase {
           'type': draft.type.name,
           'weight': 3,
           'position': i,
+          'emoji': draft.emoji,
         });
       }
       return projectId;
     });
+  }
+
+  Future<void> renameProject(int id, String name) async {
+    final db = await database;
+    await db.update('projects', {'name': name}, where: 'id = ?', whereArgs: [id]);
   }
 
   Future<void> deleteProject(int id) async {
@@ -199,6 +214,46 @@ class AppDatabase {
   Future<void> deleteAllProjects() async {
     final db = await database;
     await db.delete('projects');
+  }
+
+  // ---------- 이름 중복 ----------
+  //
+  // 같은 이름이 둘 있으면 목록에서 어느 쪽이 어느 쪽인지 알 수 없다. 특히 순위가
+  // 섞여 보이는 화면에서는 잘못된 집을 고르게 되므로 입력 단계에서 막는다.
+
+  /// [exceptId]는 이름을 고치는 중인 자기 자신. 안 빼면 제 이름과 부딪힌다.
+  Future<bool> projectNameExists(String name, {int? exceptId}) =>
+      _nameExists('projects', null, null, name, exceptId);
+
+  Future<bool> buildingNameExists(int projectId, String name, {int? exceptId}) =>
+      _nameExists('buildings', 'project_id', projectId, name, exceptId);
+
+  Future<bool> roomNameExists(int buildingId, String name, {int? exceptId}) =>
+      _nameExists('rooms', 'building_id', buildingId, name, exceptId);
+
+  Future<bool> _nameExists(
+    String table,
+    String? ownerColumn,
+    int? ownerId,
+    String name,
+    int? exceptId,
+  ) async {
+    final db = await database;
+    final conditions = [if (ownerColumn != null) '$ownerColumn = ?', 'name = ?'];
+    final args = <Object?>[if (ownerColumn != null) ownerId, name.trim()];
+    if (exceptId != null) {
+      conditions.add('id <> ?');
+      args.add(exceptId);
+    }
+
+    final rows = await db.query(
+      table,
+      columns: ['id'],
+      where: conditions.join(' AND '),
+      whereArgs: args,
+      limit: 1,
+    );
+    return rows.isNotEmpty;
   }
 
   // ---------- 평가 기준 ----------
@@ -214,22 +269,17 @@ class AppDatabase {
     return rows.map(Criterion.fromMap).toList();
   }
 
-  Future<void> addCriterion(
-    int projectId,
-    String name,
-    CriterionScope scope,
-    CriterionType type,
-    int weight,
-  ) async {
+  Future<void> addCriterion(int projectId, CriterionDraft draft) async {
     final db = await database;
     final existing = await readCriteria(projectId);
     await db.insert('criteria', {
       'project_id': projectId,
-      'name': name,
-      'scope': scope.name,
-      'type': type.name,
-      'weight': weight,
+      'name': draft.name,
+      'scope': draft.scope.name,
+      'type': draft.type.name,
+      'weight': 3,
       'position': existing.length,
+      'emoji': draft.emoji,
     });
   }
 
@@ -243,6 +293,35 @@ class AppDatabase {
     );
   }
 
+  /// 이 기준으로 매겨둔 점수가 하나라도 있는지. 유형을 바꾸기 전에 경고할지 판단하는 데 쓴다.
+  Future<bool> hasScoresFor(int criterionId) async {
+    final db = await database;
+    for (final table in const ['building_scores', 'room_scores']) {
+      final rows = await db.query(
+        table,
+        columns: ['id'],
+        where: 'criterion_id = ?',
+        whereArgs: [criterionId],
+        limit: 1,
+      );
+      if (rows.isNotEmpty) return true;
+    }
+    return false;
+  }
+
+  /// 점수형을 여부형으로 바꿀 때, 이미 매긴 값을 있음/없음 둘 중 하나로 밀어 넣는다.
+  /// 7.5점 같은 값이 그대로 남으면 있음도 없음도 아닌 상태가 되어 화면이 설명할 수 없다.
+  Future<void> snapScoresToBinary(int criterionId) async {
+    final db = await database;
+    for (final table in const ['building_scores', 'room_scores']) {
+      await db.rawUpdate(
+        'UPDATE $table SET value = CASE WHEN value >= ? THEN ? ELSE 0 END '
+        'WHERE criterion_id = ?',
+        [kMaxScore / 2, kMaxScore, criterionId],
+      );
+    }
+  }
+
   Future<void> deleteCriterion(int id) async {
     final db = await database;
     await db.delete('criteria', where: 'id = ?', whereArgs: [id]);
@@ -250,58 +329,24 @@ class AppDatabase {
 
   // ---------- 건물 ----------
 
-  Future<List<BuildingSummary>> readBuildingSummaries(int projectId) async {
+  Future<int> createBuilding(int projectId, String name, String? memo) async {
     final db = await database;
-    final rows = await db.rawQuery('''
-      SELECT
-        b.id, b.project_id, b.name, b.memo, b.created_at,
-        (SELECT COUNT(*) FROM rooms r WHERE r.building_id = b.id) AS room_count,
-        (SELECT COUNT(*) FROM building_scores s WHERE s.building_id = b.id) AS scored_count,
-        (SELECT COUNT(*) FROM criteria c
-          WHERE c.project_id = b.project_id AND c.scope = 'building') AS criterion_count
-      FROM buildings b
-      WHERE b.project_id = ?
-      ORDER BY b.created_at DESC
-    ''', [projectId]);
-
-    return rows
-        .map(
-          (row) => BuildingSummary(
-            building: Building.fromMap(row),
-            roomCount: row['room_count'] as int,
-            buildingScoredCount: row['scored_count'] as int,
-            buildingCriterionCount: row['criterion_count'] as int,
-          ),
-        )
-        .toList();
+    return db.insert('buildings', {
+      'project_id': projectId,
+      'name': name,
+      'memo': memo,
+      'created_at': DateTime.now().toIso8601String(),
+    });
   }
 
-  /// 건물과 첫 방을 함께 만든다. 원룸처럼 건물↔방이 1:1인 경우가 흔해서,
-  /// 건물만 덩그러니 만들어두고 방을 또 추가하게 하면 번거롭다.
-  Future<int> createBuilding(
-    int projectId,
-    String name,
-    String? memo, {
-    String? firstRoomName,
-  }) async {
+  Future<void> updateBuilding(int id, String name, String? memo) async {
     final db = await database;
-    return db.transaction((txn) async {
-      final now = DateTime.now().toIso8601String();
-      final buildingId = await txn.insert('buildings', {
-        'project_id': projectId,
-        'name': name,
-        'memo': memo,
-        'created_at': now,
-      });
-      if (firstRoomName != null && firstRoomName.trim().isNotEmpty) {
-        await txn.insert('rooms', {
-          'building_id': buildingId,
-          'name': firstRoomName.trim(),
-          'created_at': now,
-        });
-      }
-      return buildingId;
-    });
+    await db.update(
+      'buildings',
+      {'name': name, 'memo': memo},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 
   Future<void> deleteBuilding(int id) async {
@@ -317,7 +362,7 @@ class AppDatabase {
       'rooms',
       where: 'building_id = ?',
       whereArgs: [buildingId],
-      orderBy: 'created_at DESC',
+      orderBy: 'created_at ASC',
     );
     return rows.map(Room.fromMap).toList();
   }
@@ -330,6 +375,16 @@ class AppDatabase {
       'memo': memo,
       'created_at': DateTime.now().toIso8601String(),
     });
+  }
+
+  Future<void> updateRoom(int id, String name, String? memo) async {
+    final db = await database;
+    await db.update(
+      'rooms',
+      {'name': name, 'memo': memo},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 
   /// 방을 지우되 되돌릴 수 있도록 점수·미디어까지 담은 사본을 돌려준다.
@@ -376,6 +431,7 @@ class AppDatabase {
           'path': item.path,
           'kind': item.kind.name,
           'label': item.label,
+          'thumb_path': item.thumbPath,
           'created_at': item.createdAt.toIso8601String(),
         });
       }
@@ -420,6 +476,18 @@ class AppDatabase {
   ) async {
     final db = await database;
     await db.transaction((txn) async {
+      // 지운 점수는 행까지 없애야 '아직 안 매김'으로 돌아간다.
+      // 남겨두면 화면에서만 지워지고 순위 계산에는 계속 끼어든다.
+      // (키는 DB에서 온 정수라 그대로 넣어도 안전하다)
+      final keep = values.keys.join(',');
+      await txn.delete(
+        table,
+        where: values.isEmpty
+            ? '$ownerColumn = ?'
+            : '$ownerColumn = ? AND criterion_id NOT IN ($keep)',
+        whereArgs: [ownerId],
+      );
+
       for (final entry in values.entries) {
         await txn.insert(table, {
           ownerColumn: ownerId,
@@ -428,21 +496,6 @@ class AppDatabase {
         }, conflictAlgorithm: ConflictAlgorithm.replace);
       }
     });
-  }
-
-  /// 건물 안 각 방의 채점 진행 상황. {roomId: 채점된 기준 수}
-  Future<Map<int, int>> readRoomScoredCounts(int buildingId) async {
-    final db = await database;
-    final rows = await db.rawQuery('''
-      SELECT r.id AS room_id, COUNT(s.id) AS scored
-      FROM rooms r
-      LEFT JOIN room_scores s ON s.room_id = r.id
-      WHERE r.building_id = ?
-      GROUP BY r.id
-    ''', [buildingId]);
-    return {
-      for (final row in rows) row['room_id'] as int: row['scored'] as int,
-    };
   }
 
   // ---------- 사진 · 영상 ----------
@@ -464,6 +517,7 @@ class AppDatabase {
     required String path,
     required MediaKind kind,
     String? label,
+    String? thumbPath,
   }) async {
     final db = await database;
     await db.insert('media', {
@@ -472,8 +526,29 @@ class AppDatabase {
       'path': path,
       'kind': kind.name,
       'label': label,
+      'thumb_path': thumbPath,
       'created_at': DateTime.now().toIso8601String(),
     });
+  }
+
+  /// 붙인 곳을 옮긴다. 건물에 찍어둔 걸 방으로, 또는 그 반대로.
+  ///
+  /// 소유자 컬럼은 둘 중 하나만 채워져야 하므로(CHECK 제약) 반대쪽은 반드시 비운다.
+  /// 구역 이름은 건물용·방용 목록이 달라서 옮길 때 다시 정해 받는다.
+  Future<void> moveMedia(
+    int id, {
+    int? buildingId,
+    int? roomId,
+    required String label,
+  }) async {
+    assert((buildingId == null) != (roomId == null), '건물이나 방 중 하나여야 한다');
+    final db = await database;
+    await db.update(
+      'media',
+      {'building_id': buildingId, 'room_id': roomId, 'label': label},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 
   Future<void> deleteMedia(int id) async {
@@ -481,20 +556,38 @@ class AppDatabase {
     await db.delete('media', where: 'id = ?', whereArgs: [id]);
   }
 
+  /// 저장소 정리에 쓴다. DB가 아직 참조하고 있는 파일 경로 전체.
+  Future<Set<String>> readAllMediaPaths() async {
+    final db = await database;
+    final rows = await db.query('media', columns: ['path', 'thumb_path']);
+    return {
+      for (final row in rows) ...[
+        row['path'] as String,
+        ?(row['thumb_path'] as String?),
+      ],
+    };
+  }
+
+
   // ---------- 순위 ----------
 
-  /// 프로젝트 안 모든 방을 점수순으로 계산해 돌려준다.
+  /// 프로젝트의 **모든 방**을 건물 구분 없이 한 줄로 세워 돌려준다.
   ///
-  /// 방의 점수 = 그 방이 속한 건물의 점수 + 방 자체 점수. 건물 기준을 방마다
-  /// 다시 매기지 않는 대신, 순위에서는 함께 반영해야 공정하다.
+  /// 고르는 대상이 방이므로 순위도 방 단위다. 건물은 그 방들이 공유하는 평가를
+  /// 한 번만 받아두는 묶음일 뿐이라 따로 점수를 갖지 않는다.
   ///
-  /// 아직 덜 매긴 방도 비교는 되도록 **매긴 기준만으로 가중 평균**을 낸다.
-  /// (전체 기준으로 나누면 덜 채점했다는 이유만으로 점수가 낮아진다)
-  Future<List<RankedRoom>> readRanking(int projectId) async {
+  /// - 방의 점수 = 그 방이 속한 건물의 점수 + 방 자체 점수.
+  /// - 다 매기기 전에는 점수를 내지 않고, 정렬에서만 0점으로 취급해 아래에 둔다.
+  ///   동점이면 점수가 나온 쪽이 먼저, 그래도 같으면 건물·방 이름 가나다순.
+  Future<List<RoomScore>> readRoomBoard(int projectId) async {
     final db = await database;
 
     final criteria = await readCriteria(projectId);
     final byId = {for (final criterion in criteria) criterion.id!: criterion};
+    final roomCriterionCount = criteria
+        .where((criterion) => criterion.scope == CriterionScope.room)
+        .length;
+    final buildingCriterionCount = criteria.length - roomCriterionCount;
 
     final buildingRows = await db.query(
       'buildings',
@@ -511,6 +604,7 @@ class AppDatabase {
       JOIN buildings b ON b.id = r.building_id
       WHERE b.project_id = ?
     ''', [projectId]);
+    if (roomRows.isEmpty) return [];
 
     final buildingScoreRows = await db.rawQuery('''
       SELECT s.building_id, s.criterion_id, s.value FROM building_scores s
@@ -538,34 +632,84 @@ class AppDatabase {
     final byBuilding = group(buildingScoreRows, 'building_id');
     final byRoom = group(roomScoreRows, 'room_id');
 
-    final ranked = <RankedRoom>[];
+    final board = <RoomScore>[];
     for (final row in roomRows) {
       final room = Room.fromMap(row);
       final building = buildings[room.buildingId];
       if (building == null) continue;
 
-      final scores = {...?byBuilding[room.buildingId], ...?byRoom[room.id]};
-      final result = computeScore(scores: scores, criteriaById: byId);
+      final buildingScores = byBuilding[building.id] ?? const <int, double>{};
+      final roomScores = byRoom[room.id] ?? const <int, double>{};
+      final result = computeScore(
+        scores: {...buildingScores, ...roomScores},
+        criteriaById: byId,
+      );
 
-      ranked.add(
-        RankedRoom(
+      board.add(
+        RoomScore(
           room: room,
           building: building,
           percent: result.percent,
-          scoredCount: result.scoredCount,
-          totalCount: criteria.length,
+          // 진행률 막대는 방 기준만 센다. 건물 기준은 건물 화면에서 따로 보여준다.
+          scoredCount: roomScores.length,
+          criterionCount: roomCriterionCount,
+          blockedByBuilding:
+              (roomCriterionCount == 0 || roomScores.length >= roomCriterionCount) &&
+              buildingCriterionCount > 0 &&
+              buildingScores.length < buildingCriterionCount,
         ),
       );
     }
 
-    ranked.sort((a, b) => b.percent.compareTo(a.percent));
-    return ranked;
+    board.sort(
+      _byScore(
+        (entry) => entry.percent,
+        (entry) => '${entry.building.name} ${entry.room.name}',
+      ),
+    );
+    return board;
   }
 
-  /// 저장소 정리에 쓴다. DB가 아직 참조하고 있는 파일 경로 전체.
-  Future<Set<String>> readAllMediaPaths() async {
+  /// 건물 관리 화면용. 건물에는 점수가 없으므로 진행 상황만 세어 이름순으로 돌려준다.
+  Future<List<BuildingSummary>> readBuildingSummaries(int projectId) async {
     final db = await database;
-    final rows = await db.query('media', columns: ['path']);
-    return rows.map((row) => row['path'] as String).toSet();
+    final rows = await db.rawQuery('''
+      SELECT
+        b.id, b.project_id, b.name, b.memo, b.created_at,
+        (SELECT COUNT(*) FROM rooms r WHERE r.building_id = b.id) AS room_count,
+        (SELECT COUNT(*) FROM building_scores s WHERE s.building_id = b.id) AS scored_count,
+        (SELECT COUNT(*) FROM criteria c
+          WHERE c.project_id = b.project_id AND c.scope = 'building') AS criterion_count
+      FROM buildings b
+      WHERE b.project_id = ?
+      ORDER BY b.name ASC
+    ''', [projectId]);
+
+    return rows
+        .map(
+          (row) => BuildingSummary(
+            building: Building.fromMap(row),
+            roomCount: row['room_count'] as int,
+            buildingScoredCount: row['scored_count'] as int,
+            buildingCriterionCount: row['criterion_count'] as int,
+          ),
+        )
+        .toList();
+  }
+
+  /// 점수 내림차순. 아직 점수가 안 나온 것은 0점으로 보고 아래에 둔다.
+  /// 값이 같으면 점수가 나온 쪽이 먼저, 그래도 같으면 이름 가나다순.
+  /// 목록 순서가 볼 때마다 흔들리지 않도록 동점 처리까지 못박아둔다.
+  static int Function(T, T) _byScore<T>(
+    double? Function(T) score,
+    String Function(T) name,
+  ) {
+    return (a, b) {
+      final byScore = (score(b) ?? 0).compareTo(score(a) ?? 0);
+      if (byScore != 0) return byScore;
+
+      final byHasScore = (score(b) != null ? 1 : 0).compareTo(score(a) != null ? 1 : 0);
+      return byHasScore != 0 ? byHasScore : name(a).compareTo(name(b));
+    };
   }
 }

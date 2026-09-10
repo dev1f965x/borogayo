@@ -1,20 +1,33 @@
 import 'models.dart';
 
 class ScoreResult {
-  /// 0~100.
-  final double percent;
+  const ScoreResult({
+    required this.percent,
+    required this.scoredCount,
+    required this.criterionCount,
+  });
 
-  /// 실제로 계산에 들어간 기준 개수.
+  /// 0~100. **모든 기준을 매겼을 때만** 값이 있고, 하나라도 비면 null.
+  final double? percent;
+
+  /// 실제로 매긴 기준 개수.
   final int scoredCount;
 
-  const ScoreResult({required this.percent, required this.scoredCount});
+  /// 매겨야 하는 기준 전체 개수.
+  final int criterionCount;
+
+  bool get hasScore => percent != null;
+
+  /// 목록을 세울 때 쓰는 값. 아직 점수가 안 나온 것은 0으로 취급해 아래로 내린다.
+  double get rankValue => percent ?? 0;
 }
 
 /// 매긴 점수들을 중요도로 가중해 0~100으로 환산한다.
 ///
-/// 전체 기준 수가 아니라 **매긴 기준만으로** 나눈다. 전체로 나누면 덜 채점했다는
-/// 이유만으로 점수가 낮아져서, 절반만 본 방과 다 본 방을 비교할 수 없게 된다.
-/// 대신 표본이 적을 수 있으므로 화면에서는 [ScoreResult.scoredCount]를 함께 보여준다.
+/// **전부 매기기 전에는 점수를 내지 않는다.** 절반만 본 집에도 숫자가 붙으면,
+/// 그 숫자가 "이 집의 값"인지 "여기까지 본 결과"인지 구분할 수 없다. 목록이 곧 순위인
+/// 화면에서는 그 애매함이 그대로 잘못된 판단이 된다. 그래서 다 매기기 전에는 `—`로 두고,
+/// 순위에서는 0점 취급해 아래에 남긴다. 다 보고 나면 그때 제자리를 찾는다.
 ///
 /// 있음/없음 기준도 0과 10으로 저장되므로 여기서 타입을 나눌 필요가 없다.
 ScoreResult computeScore({
@@ -25,19 +38,23 @@ ScoreResult computeScore({
   var maxWeighted = 0.0;
   var scoredCount = 0;
 
-  for (final entry in scores.entries) {
-    final criterion = criteriaById[entry.key];
-    // 기준이 지워졌는데 점수만 남아있는 경우는 계산에서 뺀다.
-    if (criterion == null) continue;
-
-    weighted += entry.value * criterion.weight;
+  // 기준을 기준으로 돈다. 점수 쪽을 돌면 지워진 기준에 남은 점수까지 세게 된다.
+  for (final criterion in criteriaById.values) {
     maxWeighted += kMaxScore * criterion.weight;
+
+    final value = scores[criterion.id];
+    if (value == null) continue;
+
+    weighted += value * criterion.weight;
     scoredCount++;
   }
 
+  final complete = criteriaById.isNotEmpty && scoredCount >= criteriaById.length;
+
   return ScoreResult(
-    percent: maxWeighted == 0 ? 0 : weighted / maxWeighted * 100,
+    percent: complete && maxWeighted > 0 ? weighted / maxWeighted * 100 : null,
     scoredCount: scoredCount,
+    criterionCount: criteriaById.length,
   );
 }
 
@@ -62,6 +79,11 @@ class ScoreDraft {
   double? valueOf(int criterionId) => _values[criterionId];
 
   void set(int criterionId, double value) => _values[criterionId] = value;
+
+  /// 잘못 건드린 값을 '아직 안 매김'으로 되돌린다.
+  /// 슬라이더는 스치기만 해도 값이 들어가는데, 점수는 전부 매겨야 나오므로
+  /// 되돌릴 방법이 없으면 실수 한 번에 그 방이 계속 `—`로 남는다.
+  void clear(int criterionId) => _values.remove(criterionId);
 
   bool get isDirty {
     if (_values.length != _saved.length) return true;

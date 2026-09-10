@@ -14,13 +14,17 @@ class CriterionScoreCard extends StatelessWidget {
     required this.criterion,
     required this.value,
     required this.onChanged,
+    required this.onCleared,
   });
 
   final Criterion criterion;
 
-  /// 아직 매기지 않았으면 null.
+  /// 아직 매기지 않았으면 null. 화면에서는 흐린 `0`으로 두어 "안 건드림"이 보이게 한다.
   final double? value;
   final ValueChanged<double> onChanged;
+
+  /// 잘못 건드린 값을 다시 '안 매김'으로 되돌린다.
+  final VoidCallback onCleared;
 
   @override
   Widget build(BuildContext context) {
@@ -32,6 +36,10 @@ class CriterionScoreCard extends StatelessWidget {
         children: [
           Row(
             children: [
+              if (criterion.emoji != null) ...[
+                Text(criterion.emoji!, style: const TextStyle(fontSize: 16)),
+                const SizedBox(width: 6),
+              ],
               Flexible(
                 child: Text(
                   criterion.name,
@@ -45,15 +53,25 @@ class CriterionScoreCard extends StatelessWidget {
               const SizedBox(width: 8),
               _Pill(text: '중요도 ${criterion.weight}', color: palette.brand),
               const Spacer(),
+              // 매긴 뒤에만 나온다. 슬라이더는 스치기만 해도 값이 들어가서
+              // 되돌릴 길이 없으면 실수 한 번에 그 방 점수가 계속 막힌다.
               if (value != null)
-                Text(
-                  criterion.type == CriterionType.binary
-                      ? (value! >= kMaxScore ? '있음' : '없음')
-                      : formatScore(value!),
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: palette.textStrong,
+                GestureDetector(
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    onCleared();
+                  },
+                  behavior: HitTestBehavior.opaque,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    child: Text(
+                      '지우기',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: palette.textMuted,
+                      ),
+                    ),
                   ),
                 ),
             ],
@@ -122,6 +140,7 @@ class _ScaleInput extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final scored = value != null;
 
     return Row(
       children: [
@@ -135,8 +154,6 @@ class _ScaleInput extends StatelessWidget {
               trackHeight: 4,
             ),
             child: Slider(
-              // 아직 안 매긴 항목은 가운데가 아니라 0에서 시작하게 두어
-              // "안 건드림"과 "0점"이 눈으로 구분되도록 한다.
               value: value ?? 0,
               min: 0,
               max: kMaxScore,
@@ -150,15 +167,16 @@ class _ScaleInput extends StatelessWidget {
             ),
           ),
         ),
+        // 숫자는 여기 한 곳에만. 카드 위쪽에도 같은 값을 띄우면 눈이 두 군데를 오간다.
         SizedBox(
-          width: 34,
+          width: 32,
           child: Text(
-            value == null ? '—' : formatScore(value!),
+            formatScore(value ?? 0),
             textAlign: TextAlign.right,
             style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: value == null ? palette.textMuted : palette.textBody,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: scored ? palette.textStrong : palette.textMuted,
             ),
           ),
         ),
