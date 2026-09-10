@@ -1,4 +1,4 @@
-package com.dev1f965x.borogayo
+package io.github.dev1f965x.borogayo
 
 import io.flutter.embedding.android.FlutterActivity
 

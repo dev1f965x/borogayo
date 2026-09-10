@@ -46,3 +46,6 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Gradle 빌드 산출물. 루트의 /build/ 규칙이 여기까지는 못 잡는다.
+android/build/
