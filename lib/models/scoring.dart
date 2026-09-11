@@ -7,29 +7,29 @@ class ScoreResult {
     required this.criterionCount,
   });
 
-  /// 0~100. **모든 기준을 매겼을 때만** 값이 있고, 하나라도 비면 null.
+  /// 0–100 once **every** criterion is scored; null while any is missing.
   final double? percent;
 
-  /// 실제로 매긴 기준 개수.
+  /// Criteria scored so far.
   final int scoredCount;
 
-  /// 매겨야 하는 기준 전체 개수.
+  /// Criteria that need a score.
   final int criterionCount;
 
   bool get hasScore => percent != null;
 
-  /// 목록을 세울 때 쓰는 값. 아직 점수가 안 나온 것은 0으로 취급해 아래로 내린다.
+  /// Sort value. Unfinished results count as 0 and sink to the bottom.
   double get rankValue => percent ?? 0;
 }
 
-/// 매긴 점수들을 중요도로 가중해 0~100으로 환산한다.
+/// Weights the scores by importance and converts them to 0–100.
 ///
-/// **전부 매기기 전에는 점수를 내지 않는다.** 절반만 본 집에도 숫자가 붙으면,
-/// 그 숫자가 "이 집의 값"인지 "여기까지 본 결과"인지 구분할 수 없다. 목록이 곧 순위인
-/// 화면에서는 그 애매함이 그대로 잘못된 판단이 된다. 그래서 다 매기기 전에는 `—`로 두고,
-/// 순위에서는 0점 취급해 아래에 남긴다. 다 보고 나면 그때 제자리를 찾는다.
+/// **No score until everything is scored.** A number on a half-rated place can't tell
+/// "what this place is worth" from "what was rated so far", and on a screen where the list
+/// is the ranking that ambiguity becomes a wrong decision. Unfinished places show `—` and
+/// rank as 0 until they are complete.
 ///
-/// 있음/없음 기준도 0과 10으로 저장되므로 여기서 타입을 나눌 필요가 없다.
+/// Binary criteria are stored as 0 or 10, so types need no special handling here.
 ScoreResult computeScore({
   required Map<int, double> scores,
   required Map<int, Criterion> criteriaById,
@@ -38,7 +38,7 @@ ScoreResult computeScore({
   var maxWeighted = 0.0;
   var scoredCount = 0;
 
-  // 기준을 기준으로 돈다. 점수 쪽을 돌면 지워진 기준에 남은 점수까지 세게 된다.
+  // Iterate criteria, not scores, so scores left over from deleted criteria don't count.
   for (final criterion in criteriaById.values) {
     maxWeighted += kMaxScore * criterion.weight;
 
@@ -49,7 +49,8 @@ ScoreResult computeScore({
     scoredCount++;
   }
 
-  final complete = criteriaById.isNotEmpty && scoredCount >= criteriaById.length;
+  final complete =
+      criteriaById.isNotEmpty && scoredCount >= criteriaById.length;
 
   return ScoreResult(
     percent: complete && maxWeighted > 0 ? weighted / maxWeighted * 100 : null,
@@ -58,10 +59,10 @@ ScoreResult computeScore({
   );
 }
 
-/// 채점 화면이 들고 있는 '편집 중인 점수'.
+/// Scores being edited on a scoring screen.
 ///
-/// 건물 채점과 방 채점이 똑같이 "불러온 값과 지금 값을 비교해서 저장 여부를 판단"해야 한다.
-/// 그 규칙을 화면마다 각자 두면 어긋나기 쉬워서 여기에 모았다.
+/// Building and room scoring both decide whether to save by comparing the loaded values
+/// with the current ones; keeping that rule in one place stops the screens drifting apart.
 class ScoreDraft {
   ScoreDraft(Map<int, double> saved)
     : _values = Map.of(saved),
@@ -80,9 +81,8 @@ class ScoreDraft {
 
   void set(int criterionId, double value) => _values[criterionId] = value;
 
-  /// 잘못 건드린 값을 '아직 안 매김'으로 되돌린다.
-  /// 슬라이더는 스치기만 해도 값이 들어가는데, 점수는 전부 매겨야 나오므로
-  /// 되돌릴 방법이 없으면 실수 한 번에 그 방이 계속 `—`로 남는다.
+  /// Resets a value to unscored. A slider takes a value on the lightest touch, and since
+  /// scores need every criterion, a room would otherwise be stuck at `—` after one slip.
   void clear(int criterionId) => _values.remove(criterionId);
 
   bool get isDirty {
@@ -93,6 +93,6 @@ class ScoreDraft {
     return false;
   }
 
-  /// 저장에 성공한 뒤 호출한다. 이후로는 다시 깨끗한 상태가 된다.
+  /// Call after a successful save to make the draft clean again.
   void markSaved() => _saved = Map.of(_values);
 }

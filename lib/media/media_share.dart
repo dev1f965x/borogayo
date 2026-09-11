@@ -4,12 +4,11 @@ import 'package:share_plus/share_plus.dart';
 
 import '../models/models.dart';
 
-/// 사진·영상은 파일만 넘기고, 설명은 클립보드에 넣어둔다.
+/// Shares only the files and puts the description on the clipboard.
 ///
-/// 안드로이드 공유는 파일과 텍스트를 한 인텐트에 같이 실을 수 있지만, 파일이 있으면
-/// 텍스트 쪽을 버리는 앱이 많다(카카오톡). 어떤 앱은 받고 어떤 앱은 버리면 보내는 사람이
-/// 결과를 예측할 수 없다. 그래서 아예 파일만 보내고 설명은 붙여넣게 한다.
-/// 어디로 보내든 동작이 같고, 붙여넣을지 말지는 보내는 사람이 그때 정하면 된다.
+/// An Android share intent can carry files and text together, but many apps (KakaoTalk
+/// among them) drop the text when files are present. Sending files only behaves the same
+/// everywhere, and the sender decides whether to paste the description.
 Future<void> shareMedia(
   BuildContext context, {
   required String ownerLabel,
@@ -21,7 +20,7 @@ Future<void> shareMedia(
   await Clipboard.setData(ClipboardData(text: text));
   if (!context.mounted) return;
 
-  // 공유창이 열리기 전에 띄워야 눈에 들어온다. 돌아온 뒤에 알려주면 이미 늦다.
+  // Show this before the share sheet opens; after returning it's too late to notice.
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
     ..showSnackBar(
@@ -36,9 +35,9 @@ Future<void> shareMedia(
   );
 }
 
-/// 클립보드에 담기는 한 줄. 예) `대성빌라 302호 · 거실`, `대성빌라 302호 · 거실 2, 주방`
+/// The clipboard line, e.g. `대성빌라 302호 · 거실` or `대성빌라 302호 · 거실 2, 주방`.
 String buildShareText(String ownerLabel, List<MediaItem> items) {
-  // 넣은 순서를 그대로 쓴다. 구역이 없던 옛 항목은 셀 것이 없으므로 건너뛴다.
+  // Keep insertion order. Older items without an area have nothing to count and are skipped.
   final counts = <String, int>{};
   for (final item in items) {
     final area = item.label;

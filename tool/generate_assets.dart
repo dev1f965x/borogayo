@@ -1,7 +1,7 @@
-// 앱 아이콘과 스플래시 이미지를 코드로 그린다.
+// Draws the app icon and splash images.
 //
-// 디자인 툴로 만든 PNG를 저장소에 넣어두면 색 하나 바꾸는 데도 원본 파일이 필요해진다.
-// 모양이 단순한 김에 스크립트로 두고, 브랜드 색이 바뀌면 여기만 고쳐 다시 돌린다.
+// The shapes are simple enough to keep as code instead of design files;
+// change the brand color here and rerun.
 //
 //   dart run tool/generate_assets.dart
 //   dart run flutter_launcher_icons
@@ -12,21 +12,29 @@ import 'dart:math' as math;
 
 import 'package:image/image.dart' as img;
 
-/// 브랜드 보라. lib/theme.dart의 brand와 같은 값.
+/// Brand purple, same as `brand` in lib/theme.dart.
 const _brandTop = (r: 0x8B, g: 0x79, b: 0x9E);
 const _brandBottom = (r: 0x6A, g: 0x5A, b: 0x7C);
 final _brand = img.ColorRgba8(0x7B, 0x6A, 0x8D, 255);
 final _white = img.ColorRgba8(0xFF, 0xFF, 0xFF, 255);
 
-/// 4배로 그린 뒤 줄인다. 도형을 직접 찍으면 경계가 계단처럼 남는데,
-/// 축소하면서 평균이 나므로 따로 안티에일리어싱을 걸 필요가 없다.
+/// Drawn at 4x and scaled down, which antialiases the edges.
 const _supersample = 4;
 
 void main() {
-  _write('assets/icon/icon.png', _icon(1024, withBackground: true, glyphScale: 0.60));
-  _write('assets/icon/foreground.png', _icon(1024, withBackground: false, glyphScale: 0.45));
-  _write('assets/splash/splash.png', _icon(512, withBackground: false, glyphScale: 0.80));
-  // 안드로이드 12 스플래시는 가운데 원 안에만 그림이 남는다. 잘리지 않게 작게 그린다.
+  _write(
+    'assets/icon/icon.png',
+    _icon(1024, withBackground: true, glyphScale: 0.60),
+  );
+  _write(
+    'assets/icon/foreground.png',
+    _icon(1024, withBackground: false, glyphScale: 0.45),
+  );
+  _write(
+    'assets/splash/splash.png',
+    _icon(512, withBackground: false, glyphScale: 0.80),
+  );
+  // The Android 12 splash crops to a circle, so the glyph is drawn smaller.
   _write(
     'assets/splash/splash_android12.png',
     _icon(1152, withBackground: false, glyphScale: 0.40),
@@ -41,15 +49,18 @@ void _write(String path, img.Image image) {
   stdout.writeln('$path  ${image.width}x${image.height}');
 }
 
-/// 집 모양 안에 체크가 하나 들어간 그림.
-/// "본 집을 확인해서 고른다"는 앱의 일이 그대로 보이는 가장 짧은 형태.
-img.Image _icon(int size, {required bool withBackground, required double glyphScale}) {
+/// A house with a check mark: picking a place after checking it out.
+img.Image _icon(
+  int size, {
+  required bool withBackground,
+  required double glyphScale,
+}) {
   final canvas = size * _supersample;
   final image = img.Image(width: canvas, height: canvas, numChannels: 4);
   img.fill(image, color: img.ColorRgba8(0, 0, 0, 0));
 
   if (withBackground) {
-    // 단색보다 위아래로 아주 옅은 그라디언트를 주는 편이 홈 화면에서 덜 납작하다.
+    // A faint vertical gradient looks less flat on the home screen than a solid color.
     for (var y = 0; y < canvas; y++) {
       final t = y / (canvas - 1);
       img.drawLine(
@@ -72,7 +83,7 @@ img.Image _icon(int size, {required bool withBackground, required double glyphSc
   final cx = canvas / 2;
   final cy = canvas / 2;
 
-  // ----- 지붕 -----
+  // ----- Roof -----
   img.fillPolygon(
     image,
     vertices: [
@@ -83,7 +94,7 @@ img.Image _icon(int size, {required bool withBackground, required double glyphSc
     color: _white,
   );
 
-  // ----- 몸통 -----
+  // ----- Body -----
   final left = cx - s * 0.355;
   final right = cx + s * 0.355;
   final top = cy - s * 0.09;
@@ -112,8 +123,8 @@ img.Image _icon(int size, {required bool withBackground, required double glyphSc
     );
   }
 
-  // ----- 체크 -----
-  // 굵은 선(drawLine thickness)은 획이 겹치면서 줄무늬가 생긴다. 사각형 두 개로 직접 그린다.
+  // ----- Check -----
+  // Thick drawLine strokes band where they overlap, so the check is two rectangles.
   final h = s * 0.055;
   final a = img.Point(cx - s * 0.165, cy + s * 0.130);
   final b = img.Point(cx - s * 0.045, cy + s * 0.245);
@@ -139,7 +150,7 @@ img.Image _icon(int size, {required bool withBackground, required double glyphSc
   );
 }
 
-/// 점 [from]에서 [to]까지 두께 [half]*2인 획 하나.
+/// A stroke from [from] to [to] with thickness [half] * 2.
 void _stroke(img.Image image, img.Point from, img.Point to, double half) {
   final dx = to.x - from.x;
   final dy = to.y - from.y;

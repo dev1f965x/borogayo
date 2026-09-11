@@ -10,7 +10,7 @@ import 'widgets/confirm_dialog.dart';
 import 'widgets/delete_action.dart';
 import 'widgets/entry_dialog.dart';
 
-/// 앱 첫 화면. 만들어둔 집 찾기 목록들을 보여준다.
+/// Home screen listing house-hunting projects.
 class ProjectListScreen extends StatefulWidget {
   const ProjectListScreen({super.key});
 
@@ -37,8 +37,8 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
     });
   }
 
-  /// 이름부터 팝업으로 받고, 평가 기준은 다음 화면에서 정한다.
-  /// 이름 한 줄과 기준 열두 개를 한 화면에 같이 두면 무게가 안 맞는다.
+  /// Asks for the name in a dialog, then sets up criteria on the next screen.
+  /// A single name field doesn't belong on the same page as a dozen criteria.
   Future<void> _openForm() async {
     final entry = await showDialog<EntryResult>(
       context: context,
@@ -68,13 +68,12 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
   }
 
   Future<void> _openSettings() async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(builder: (_) => const SettingsScreen()),
-    );
+    await Navigator.of(context)
+        .push<void>(MaterialPageRoute(builder: (_) => const SettingsScreen()));
     await _refresh();
   }
 
-  /// 목록 삭제는 안에 든 게 전부 사라지는 무거운 동작이라, 두 번 누르기에 더해 확인까지 받는다.
+  /// Deleting a project removes everything in it, so it takes a confirmation on top of the double tap.
   Future<void> _confirmDelete(Project project) async {
     final ok = await confirmDestructive(
       context,
@@ -149,7 +148,10 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
               foregroundColor: Colors.white,
               elevation: 0,
               icon: const Icon(Icons.add),
-              label: const Text('새 목록', style: TextStyle(fontWeight: FontWeight.w600)),
+              label: const Text(
+                '새 목록',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
             ),
     );
   }

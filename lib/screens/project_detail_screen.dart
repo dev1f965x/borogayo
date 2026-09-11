@@ -11,10 +11,10 @@ import 'widgets/entry_dialog.dart';
 import 'widgets/room_card.dart';
 import 'widgets/room_entry_dialog.dart';
 
-/// 목록 하나. 보러 간 방들이 점수순으로 늘 정렬돼 있는 화면.
+/// One project: the visited rooms, always sorted by score.
 ///
-/// 고르는 대상은 건물이 아니라 방이므로, 여기서는 건물을 가로질러 방을 한 줄로 세운다.
-/// 건물은 방들이 공유하는 평가를 담아두는 묶음일 뿐이라 '건물' 화면으로 따로 뺐다.
+/// Rooms are what get chosen, so they're ranked in one list across buildings.
+/// Buildings only hold shared ratings and have their own screen.
 class ProjectDetailScreen extends StatefulWidget {
   const ProjectDetailScreen({super.key, required this.project});
 
@@ -30,7 +30,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   List<Criterion> _roomCriteria = [];
   bool _loading = true;
 
-  /// 이름을 고칠 수 있으므로 넘겨받은 값을 계속 쓰지 않고 여기서 들고 간다.
+  /// Kept here rather than read from the widget, since the name can be edited.
   late String _name = widget.project.name;
 
   int get _projectId => widget.project.id!;
@@ -45,7 +45,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     final db = AppDatabase.instance;
     final rooms = await db.readRoomBoard(_projectId);
     final buildings = await db.readBuildingSummaries(_projectId);
-    final roomCriteria = await db.readCriteria(_projectId, scope: CriterionScope.room);
+    final roomCriteria = await db.readCriteria(
+      _projectId,
+      scope: CriterionScope.room,
+    );
     if (!mounted) return;
     setState(() {
       _rooms = rooms;
@@ -55,12 +58,13 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     });
   }
 
-  /// 방을 하나 더 본다는 게 곧 매물을 하나 더 넣는다는 뜻이라, 여기서 건물까지 같이 고른다.
-  /// 건물이 아직 없으면 다이얼로그 안에서 바로 만든다.
+  /// Adding a room means adding a listing, so the building is chosen in the same dialog
+  /// and can be created there if it doesn't exist yet.
   Future<void> _addRoom() async {
     final entry = await showDialog<RoomEntryResult>(
       context: context,
-      builder: (_) => RoomEntryDialog(projectId: _projectId, buildings: _buildings),
+      builder: (_) =>
+          RoomEntryDialog(projectId: _projectId, buildings: _buildings),
     );
     if (entry == null || !mounted) return;
 
@@ -74,7 +78,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     await _refresh();
     if (!mounted) return;
 
-    // 방을 추가한 직후엔 곧바로 채점하게 되므로 바로 그 화면으로 넘어간다.
+    // A new room is scored right away, so go straight to it.
     final created = _rooms.where((item) => item.room.id == roomId).firstOrNull;
     if (created != null) await _openRoom(created);
   }
@@ -101,7 +105,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         confirmLabel: '저장',
         initialName: _name,
         nameCheck: (name) async =>
-            await AppDatabase.instance.projectNameExists(name, exceptId: _projectId)
+            await AppDatabase.instance.projectNameExists(
+              name,
+              exceptId: _projectId,
+            )
             ? '같은 이름의 목록이 이미 있어요.'
             : null,
       ),
@@ -116,19 +123,23 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
 
   Future<void> _openBuildings() async {
     await Navigator.of(context).push<void>(
-      MaterialPageRoute(builder: (_) => BuildingListScreen(project: widget.project)),
+      MaterialPageRoute(
+        builder: (_) => BuildingListScreen(project: widget.project),
+      ),
     );
     await _refresh();
   }
 
   Future<void> _editCriteria() async {
     await Navigator.of(context).push<void>(
-      MaterialPageRoute(builder: (_) => CriteriaEditScreen(projectId: _projectId)),
+      MaterialPageRoute(
+        builder: (_) => CriteriaEditScreen(projectId: _projectId),
+      ),
     );
     await _refresh();
   }
 
-  /// 방 삭제는 자주 일어나고 되돌리기 쉬우므로 확인 대신 실행취소를 제공한다.
+  /// Room deletion is common and easy to reverse, so it offers undo instead of a confirmation.
   Future<void> _deleteRoom(Room room) async {
     final snapshot = await AppDatabase.instance.deleteRoom(room.id!);
     if (!mounted || snapshot == null) return;
@@ -195,8 +206,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                 for (var index = 0; index < _rooms.length; index++) ...[
                   RoomCard(
                     entry: _rooms[index],
-                    // 점수가 나온 방만 등수를 받는다. 정렬이 그들을 앞에 모아두므로
-                    // 위에서부터 센 번호가 그대로 등수가 된다.
+                    // Only scored rooms get a rank. Sorting puts them first,
+                    // so the index is the rank.
                     rank: _rooms[index].hasScore ? index + 1 : null,
                     showRank: true,
                     showBuilding: true,
@@ -220,14 +231,17 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
               foregroundColor: Colors.white,
               elevation: 0,
               icon: const Icon(Icons.add),
-              label: const Text('방 추가', style: TextStyle(fontWeight: FontWeight.w600)),
+              label: const Text(
+                '방 추가',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
             ),
     );
   }
 }
 
-/// 집계 한 줄과 건물 화면으로 가는 길. 건물은 앱바에 두기엔 자주 쓰지 않고,
-/// 아예 숨기면 공통 평가를 매기러 갈 방법이 없어져서 목록 머리에 얹었다.
+/// Summary line and the way to the building screen. Buildings aren't used often enough
+/// for the app bar, but hiding them would leave no way to rate shared criteria.
 class _Header extends StatelessWidget {
   const _Header({
     required this.buildingCount,
@@ -263,7 +277,10 @@ class _Header extends StatelessWidget {
             foregroundColor: palette.brand,
             padding: const EdgeInsets.symmetric(horizontal: 10),
             minimumSize: const Size(0, 36),
-            textStyle: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
+            textStyle: const TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ],

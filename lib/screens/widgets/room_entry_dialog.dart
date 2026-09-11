@@ -5,8 +5,8 @@ import '../../db/database.dart';
 import '../../models/models.dart';
 import '../../theme.dart';
 
-/// 방을 만들 때 필요한 값. 건물을 새로 만들어야 하면 [buildingId]가 null이고
-/// [newBuildingName]에 이름이 들어온다.
+/// Values for creating a room. When a new building is needed, [buildingId] is null
+/// and [newBuildingName] holds its name.
 typedef RoomEntryResult = ({
   int? buildingId,
   String? newBuildingName,
@@ -14,10 +14,10 @@ typedef RoomEntryResult = ({
   String? memo,
 });
 
-/// 방 추가. 어느 건물의 방인지부터 고르게 한다.
+/// Adds a room, starting with which building it belongs to.
 ///
-/// 프로젝트 화면에서 보는 것이 방 순위이므로, 무언가를 추가한다는 건 곧 방을 하나
-/// 더 본다는 뜻이다. 건물은 그 방을 담을 자리로만 고르면 되고, 없으면 여기서 바로 만든다.
+/// The project screen ranks rooms, so adding something means viewing another room.
+/// The building is just where it goes, and can be created here if it doesn't exist.
 class RoomEntryDialog extends StatefulWidget {
   const RoomEntryDialog({
     super.key,
@@ -37,7 +37,7 @@ class _RoomEntryDialogState extends State<RoomEntryDialog> {
   final _nameController = TextEditingController();
   final _memoController = TextEditingController();
 
-  /// null이면 '새 건물'을 고른 상태.
+  /// Null when "new building" is selected.
   late int? _buildingId = widget.buildings.firstOrNull?.id;
 
   String? _buildingError;
@@ -56,7 +56,9 @@ class _RoomEntryDialogState extends State<RoomEntryDialog> {
     if (_checking) return;
 
     final db = AppDatabase.instance;
-    final newBuilding = _buildingId == null ? _buildingController.text.trim() : null;
+    final newBuilding = _buildingId == null
+        ? _buildingController.text.trim()
+        : null;
     final name = _nameController.text.trim();
 
     if (newBuilding != null && newBuilding.isEmpty) {
@@ -79,7 +81,7 @@ class _RoomEntryDialogState extends State<RoomEntryDialog> {
       });
       return;
     }
-    // 새로 만드는 건물이면 그 안에 방이 있을 리 없으므로 검사할 것도 없다.
+    // A new building has no rooms, so there's nothing to collide with.
     if (_buildingId != null && await db.roomNameExists(_buildingId!, name)) {
       if (!mounted) return;
       setState(() {
@@ -161,7 +163,9 @@ class _RoomEntryDialogState extends State<RoomEntryDialog> {
                   errorText: _buildingError,
                 ),
                 onChanged: (_) {
-                  if (_buildingError != null) setState(() => _buildingError = null);
+                  if (_buildingError != null) {
+                    setState(() => _buildingError = null);
+                  }
                 },
               ),
             ],
@@ -179,7 +183,10 @@ class _RoomEntryDialogState extends State<RoomEntryDialog> {
               controller: _nameController,
               autofocus: widget.buildings.isNotEmpty,
               textInputAction: TextInputAction.next,
-              decoration: InputDecoration(hintText: '예: 302호', errorText: _nameError),
+              decoration: InputDecoration(
+                hintText: '예: 302호',
+                errorText: _nameError,
+              ),
               onChanged: (_) {
                 if (_nameError != null) setState(() => _nameError = null);
               },
@@ -188,7 +195,9 @@ class _RoomEntryDialogState extends State<RoomEntryDialog> {
             TextField(
               controller: _memoController,
               textInputAction: TextInputAction.done,
-              decoration: const InputDecoration(hintText: '메모 (선택) · 예: 65/50, 남향'),
+              decoration: const InputDecoration(
+                hintText: '메모 (선택) · 예: 65/50, 남향',
+              ),
               onSubmitted: (_) => _submit(),
             ),
           ],
@@ -239,7 +248,11 @@ class _Choice extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (icon != null) ...[
-              Icon(icon, size: 14, color: selected ? Colors.white : palette.textMuted),
+              Icon(
+                icon,
+                size: 14,
+                color: selected ? Colors.white : palette.textMuted,
+              ),
               const SizedBox(width: 4),
             ],
             Text(

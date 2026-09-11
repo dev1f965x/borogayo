@@ -1,26 +1,24 @@
-/// 평가 기준이 건물에 붙는지 방에 붙는지.
+/// Whether a criterion is scored once per building or once per room.
 ///
-/// 같은 건물의 방 여러 개를 볼 때, 교통·주차처럼 건물이면 다 같은 항목을
-/// 방마다 반복해서 매기면 낭비이고 값도 미묘하게 달라진다. 그래서 건물에서
-/// 한 번만 매기는 항목과 방마다 매기는 항목을 나눈다.
+/// Things like transit or parking are the same for every room in a building;
+/// scoring them per room is repetitive and lets the values drift apart.
 enum CriterionScope { building, room }
 
-/// 채점 방식.
-/// - [scale]  : 0~10 슬라이더 (0.5 단위)
-/// - [binary] : 없음/있음 토글. 저장은 0 또는 10으로 해서 scale과 같은 척도에 놓는다.
+/// How a criterion is scored.
+/// - [scale]: 0–10 slider in 0.5 steps
+/// - [binary]: yes/no toggle, stored as 0 or 10 so it shares the scale's range
 enum CriterionType { scale, binary }
 
-/// 화면에 노출하는 유형 이름. "0~10 점수"처럼 구현을 그대로 읽어주는 말 대신
-/// 부르기 쉬운 한 단어로 통일한다.
+/// Display name for a type: one short word rather than a description of the mechanics.
 String criterionTypeLabel(CriterionType type) =>
     type == CriterionType.scale ? '점수형' : '여부형';
 
-/// 유형을 고를 때 옆에 붙이는 한 줄 설명.
+/// One-line explanation shown next to the type when choosing it.
 String criterionTypeHint(CriterionType type) => type == CriterionType.scale
     ? '0~10점으로 매김 · 채광, 소음처럼 정도가 있는 것'
     : '있음·없음으로 매김 · 엘리베이터처럼 있고 없고가 전부인 것';
 
-/// 점수의 최대값. 두 타입 모두 이 척도를 공유하므로 가중합산 공식이 하나로 유지된다.
+/// Maximum score. Both types share this range, so one weighted formula covers both.
 const double kMaxScore = 10.0;
 
 T _enumByName<T extends Enum>(List<T> values, String? name, T fallback) {
@@ -30,7 +28,7 @@ T _enumByName<T extends Enum>(List<T> values, String? name, T fallback) {
   return fallback;
 }
 
-/// 집 찾기 한 건. 예: "2026 봄 이사"
+/// One house hunt, e.g. "Spring 2026 move".
 class Project {
   final int? id;
   final String name;
@@ -51,7 +49,7 @@ class Project {
   );
 }
 
-/// 프로젝트 안의 모든 건물/방에 공통으로 적용되는 평가 기준.
+/// A criterion shared by every building and room in a project.
 class Criterion {
   final int? id;
   final int projectId;
@@ -61,7 +59,7 @@ class Criterion {
   final int weight;
   final int position;
 
-  /// 목록에서 한눈에 찾으라고 붙이는 그림. 없어도 되는 장식이라 null을 허용한다.
+  /// Optional decoration that makes the criterion easy to spot in lists.
   final String? emoji;
 
   const Criterion({
@@ -75,17 +73,21 @@ class Criterion {
     this.emoji,
   });
 
-  Criterion copyWith({String? name, int? weight, int? position, String? emoji}) =>
-      Criterion(
-        id: id,
-        projectId: projectId,
-        name: name ?? this.name,
-        scope: scope,
-        type: type,
-        weight: weight ?? this.weight,
-        position: position ?? this.position,
-        emoji: emoji ?? this.emoji,
-      );
+  Criterion copyWith({
+    String? name,
+    int? weight,
+    int? position,
+    String? emoji,
+  }) => Criterion(
+    id: id,
+    projectId: projectId,
+    name: name ?? this.name,
+    scope: scope,
+    type: type,
+    weight: weight ?? this.weight,
+    position: position ?? this.position,
+    emoji: emoji ?? this.emoji,
+  );
 
   Map<String, Object?> toMap() => {
     if (id != null) 'id': id,
@@ -102,15 +104,23 @@ class Criterion {
     id: map['id'] as int,
     projectId: map['project_id'] as int,
     name: map['name'] as String,
-    scope: _enumByName(CriterionScope.values, map['scope'] as String?, CriterionScope.room),
-    type: _enumByName(CriterionType.values, map['type'] as String?, CriterionType.scale),
+    scope: _enumByName(
+      CriterionScope.values,
+      map['scope'] as String?,
+      CriterionScope.room,
+    ),
+    type: _enumByName(
+      CriterionType.values,
+      map['type'] as String?,
+      CriterionType.scale,
+    ),
     weight: map['weight'] as int,
     position: map['position'] as int,
     emoji: map['emoji'] as String?,
   );
 }
 
-/// 건물 한 채. 방 여러 개를 묶는다.
+/// A building grouping several rooms.
 class Building {
   final int? id;
   final int projectId;
@@ -143,7 +153,7 @@ class Building {
   );
 }
 
-/// 실제로 보러 간 방 한 칸.
+/// A room that was actually visited.
 class Room {
   final int? id;
   final int buildingId;
@@ -178,13 +188,13 @@ class Room {
 
 enum MediaKind { photo, video }
 
-/// 사진·영상을 찍은 구역을 고를 때 먼저 보여주는 후보.
-/// 현장에서 탭 한 번으로 끝나야 하므로 흔한 곳을 미리 깔아두고,
-/// 여기에 없는 곳은 직접 적을 수 있게 한다.
+/// Suggested areas when labeling a photo or video. Tagging on site should take one tap,
+/// so common places are preset and anything else can be typed in.
 const kBuildingMediaLabels = <String>['외관', '공용부', '주차장', '주변'];
 const kRoomMediaLabels = <String>['거실', '방', '주방', '화장실', '베란다', '현관'];
 
-/// 건물이나 방에 붙는 사진·영상. 파일은 앱 저장소에 복사해두고 경로만 들고 있는다.
+/// A photo or video attached to a building or room. The file is copied into app storage
+/// and only its path is kept here.
 class MediaItem {
   final int? id;
   final int? buildingId;
@@ -192,10 +202,10 @@ class MediaItem {
   final String path;
   final MediaKind kind;
 
-  /// 어느 구역을 찍은 것인지.
+  /// The area it shows.
   final String? label;
 
-  /// 영상의 첫 프레임을 미리 뽑아둔 이미지. 사진은 원본을 그대로 쓰므로 null.
+  /// Pre-extracted first frame of a video. Null for photos, which are shown directly.
   final String? thumbPath;
   final DateTime createdAt;
 
@@ -210,7 +220,7 @@ class MediaItem {
     required this.createdAt,
   });
 
-  /// 목록에 그릴 이미지 경로. 영상은 뽑아둔 썸네일이 있으면 그것을 쓴다.
+  /// Image to draw in lists: the photo itself, or a video's thumbnail if one exists.
   String? get previewPath => kind == MediaKind.photo ? path : thumbPath;
 
   Map<String, Object?> toMap() => {
@@ -229,14 +239,18 @@ class MediaItem {
     buildingId: map['building_id'] as int?,
     roomId: map['room_id'] as int?,
     path: map['path'] as String,
-    kind: _enumByName(MediaKind.values, map['kind'] as String?, MediaKind.photo),
+    kind: _enumByName(
+      MediaKind.values,
+      map['kind'] as String?,
+      MediaKind.photo,
+    ),
     label: map['label'] as String?,
     thumbPath: map['thumb_path'] as String?,
     createdAt: DateTime.parse(map['created_at'] as String),
   );
 }
 
-/// 목록 화면에서 쓰는 집계값. 저장되는 데이터가 아니라 읽을 때만 만들어진다.
+/// Aggregates for the project list, computed on read and never stored.
 class ProjectSummary {
   final Project project;
   final int buildingCount;
@@ -249,26 +263,26 @@ class ProjectSummary {
   });
 }
 
-/// 방 하나의 채점 결과. **순위에 오르는 단위는 방이다.**
+/// Scoring result for one room. **Rooms are what get ranked.**
 ///
-/// 실제로 고르는 대상이 "대성빌라"가 아니라 "대성빌라 302호"이기 때문에,
-/// 건물에는 점수를 매기지 않는다. 건물은 방들이 공유하는 평가를 한 번만 받아두는
-/// 묶음일 뿐이고, 그 값은 여기 [percent]에 이미 합산돼 들어간다.
+/// The choice is between "Daesung Villa #302" and other units, not between buildings,
+/// so buildings have no score of their own. A building only holds the ratings its rooms
+/// share, and those are already included in [percent].
 class RoomScore {
   final Room room;
 
-  /// 어느 건물의 방인지. 순위는 건물을 가로질러 한 줄로 세우므로 늘 함께 보여준다.
+  /// The room's building. The ranking spans buildings, so it's always shown alongside.
   final Building building;
 
-  /// 0~100. 건물 기준까지 **전부** 매겼을 때만 값이 있다.
+  /// 0–100, only once **every** criterion, building ones included, is scored.
   final double? percent;
 
-  /// 방 기준 중 실제로 매긴 개수. 카드의 진행률 막대에 쓴다.
+  /// Room criteria scored so far, for the card's progress bar.
   final int scoredCount;
   final int criterionCount;
 
-  /// 방은 다 매겼는데 건물 평가가 남아서 점수가 안 나오는 상태.
-  /// 이때 방 카드만 보면 다 한 것 같은데 점수가 `—`라 이유를 알려줘야 한다.
+  /// All room criteria are scored but building ones are not, so there's no score yet.
+  /// The card looks complete while showing `—`, so the reason has to be shown.
   final bool blockedByBuilding;
 
   const RoomScore({
@@ -282,11 +296,12 @@ class RoomScore {
 
   bool get hasScore => percent != null;
 
-  /// 방 기준만 놓고 봤을 때 다 매겼는지. 진행률 표시용.
-  bool get roomScoringDone => criterionCount > 0 && scoredCount >= criterionCount;
+  /// Whether every room criterion is scored, for progress display.
+  bool get roomScoringDone =>
+      criterionCount > 0 && scoredCount >= criterionCount;
 }
 
-/// 건물 관리 화면에서 쓰는 집계값. 건물에는 점수가 없으므로 진행 상황만 담는다.
+/// Aggregates for the building list. Buildings have no score, only progress.
 class BuildingSummary {
   final Building building;
   final int roomCount;
@@ -301,5 +316,6 @@ class BuildingSummary {
   });
 
   bool get buildingScoringDone =>
-      buildingCriterionCount > 0 && buildingScoredCount >= buildingCriterionCount;
+      buildingCriterionCount > 0 &&
+      buildingScoredCount >= buildingCriterionCount;
 }

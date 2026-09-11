@@ -5,12 +5,11 @@ import 'package:flutter/services.dart';
 
 import '../../theme.dart';
 
-/// 카드 오른쪽에 세로 가운데로 붙는 삭제 버튼.
+/// Delete button vertically centered on the right of a card.
 ///
-/// 한 번 누르면 빨간 '삭제'가 오른쪽에서 밀려 나오고, 그걸 다시 눌러야 실제로 지운다.
-/// 목록에서 스크롤하다 잘못 스치는 일이 잦은 자리라 두 번 누르게 만들되,
-/// 확인 다이얼로그처럼 화면을 가로막지는 않는다.
-/// 잠깐 두면 알아서 접히므로 '취소'를 따로 누를 필요도 없다.
+/// The first tap slides out a red delete button and the second one deletes. Lists get
+/// brushed while scrolling, so it takes two taps, but without a dialog in the way.
+/// It collapses by itself after a moment, so there's no cancel button.
 class DeleteAction extends StatefulWidget {
   const DeleteAction({super.key, required this.onConfirm, this.label = '삭제'});
 
@@ -59,8 +58,8 @@ class _DeleteActionState extends State<DeleteAction> {
       onTap: _armed ? _confirm : _arm,
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
-        // 펼칠 때는 "튀어나오는" 느낌으로, 접힐 때는 그 움직임을 조금 빠르게 되감는 느낌으로.
-        // 같은 속도로 돌아오면 사라지는 게 아니라 또 하나의 동작처럼 보인다.
+        // Pops out when opening and rewinds a little faster when closing.
+        // At the same speed, closing reads as another action rather than a dismissal.
         duration: Duration(milliseconds: _armed ? 190 : 130),
         curve: _armed ? Curves.easeOutCubic : Curves.easeOutCubic.flipped,
         width: _armed ? _expandedWidth : _collapsedWidth,
@@ -70,7 +69,7 @@ class _DeleteActionState extends State<DeleteAction> {
           color: _armed ? palette.danger : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
         ),
-        // 폭이 줄어드는 동안 내용이 잘리기만 하도록. 그냥 두면 넘친다고 에러가 난다.
+        // Lets the content clip while the width shrinks instead of throwing an overflow error.
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           reverse: true,
@@ -81,7 +80,11 @@ class _DeleteActionState extends State<DeleteAction> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.delete_outline, size: 16, color: Colors.white),
+                      const Icon(
+                        Icons.delete_outline,
+                        size: 16,
+                        color: Colors.white,
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         widget.label,

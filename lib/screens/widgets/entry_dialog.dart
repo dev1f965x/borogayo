@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 
-/// 다이얼로그가 돌려주는 값. 메모는 선택이라 비면 null.
+/// Dialog result. The memo is optional and null when empty.
 typedef EntryResult = ({String name, String? memo});
 
-/// 이름이 쓸 수 있는지 확인한다. 문제가 있으면 사용자에게 보여줄 문구를, 없으면 null.
+/// Validates a name, returning a message for the user or null when it's fine.
 typedef NameCheck = Future<String?> Function(String name);
 
-/// 목록·건물·방처럼 이름을 받아 무언가를 만들기 시작할 때 쓰는 다이얼로그.
+/// Dialog that asks for a name to create or rename a project, building, or room.
 ///
-/// 컨트롤러를 다이얼로그 자신의 State가 들고 있는 게 핵심이다. 바깥에서 만들어
-/// `showDialog`가 끝나자마자 dispose하면, 닫히는 애니메이션이 도는 동안 아직 살아있는
-/// TextField가 죽은 컨트롤러를 읽어서 빨간 에러 화면이 번쩍인다.
+/// The dialog's own State owns the controllers. Controllers created outside and disposed
+/// as soon as `showDialog` returns would still be read by the TextField during the closing
+/// animation, flashing the red error screen.
 class EntryDialog extends StatefulWidget {
   const EntryDialog({
     super.key,
@@ -29,7 +29,7 @@ class EntryDialog extends StatefulWidget {
   final String confirmLabel;
   final NameCheck nameCheck;
 
-  /// 고칠 때 채워 넣을 값. 새로 만들 때는 비어 있다.
+  /// Prefilled when editing; empty when creating.
   final String? initialName;
   final String? initialMemo;
 
@@ -89,7 +89,10 @@ class _EntryDialogState extends State<EntryDialog> {
             textInputAction: widget.memoHint == null
                 ? TextInputAction.done
                 : TextInputAction.next,
-            decoration: InputDecoration(hintText: widget.nameHint, errorText: _error),
+            decoration: InputDecoration(
+              hintText: widget.nameHint,
+              errorText: _error,
+            ),
             onChanged: (_) {
               if (_error != null) setState(() => _error = null);
             },

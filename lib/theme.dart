@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 
-/// 앱에서 쓰는 색을 라이트/다크 두 벌로 들고 다닌다.
-/// 화면 코드는 `context.palette.textStrong` 처럼 읽기만 하고,
-/// 어느 쪽이 적용될지는 테마가 결정한다.
+/// App colors in light and dark variants. Screens read them as
+/// `context.palette.textStrong`, and the active theme decides which set applies.
 @immutable
 class AppPalette extends ThemeExtension<AppPalette> {
   const AppPalette({
@@ -107,19 +106,19 @@ extension AppPaletteX on BuildContext {
 class AppSpacing {
   const AppSpacing._();
 
-  /// 화면 좌우 기본 여백.
+  /// Default horizontal page padding.
   static const page = 20.0;
   static const cardRadius = 16.0;
 }
 
-/// 1·2·3위에 얹는 색. 금·은·동.
+/// Gold, silver, and bronze for the top three.
 const kMedalColors = <Color>[
   Color(0xFFD4A017),
   Color(0xFF9AA0A6),
   Color(0xFFB87333),
 ];
 
-/// 카드에 얹는 날짜. 요일이나 시각까지는 필요 없고 "언제 만든 것인지"만 보면 된다.
+/// Date shown on cards. Only the day matters, not the weekday or time.
 String formatDate(DateTime value) {
   final month = value.month.toString().padLeft(2, '0');
   final day = value.day.toString().padLeft(2, '0');
@@ -129,8 +128,13 @@ String formatDate(DateTime value) {
 const _seedColor = Color(0xFF7B6A8D);
 
 ThemeData buildAppTheme(Brightness brightness) {
-  final palette = brightness == Brightness.dark ? AppPalette.dark : AppPalette.light;
-  final scheme = ColorScheme.fromSeed(seedColor: _seedColor, brightness: brightness);
+  final palette = brightness == Brightness.dark
+      ? AppPalette.dark
+      : AppPalette.light;
+  final scheme = ColorScheme.fromSeed(
+    seedColor: _seedColor,
+    brightness: brightness,
+  );
 
   return ThemeData(
     useMaterial3: true,
@@ -159,7 +163,11 @@ ThemeData buildAppTheme(Brightness brightness) {
         fontSize: 17,
         fontWeight: FontWeight.w700,
       ),
-      contentTextStyle: TextStyle(color: palette.textBody, fontSize: 14, height: 1.4),
+      contentTextStyle: TextStyle(
+        color: palette.textBody,
+        fontSize: 14,
+        height: 1.4,
+      ),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
       ),
@@ -208,7 +216,7 @@ ThemeData buildAppTheme(Brightness brightness) {
   );
 }
 
-/// 화면 상단의 큰 제목. AppBar 대신 본문에 두어 여백을 넉넉히 준다.
+/// Large screen title placed in the body instead of an AppBar, for more breathing room.
 class ScreenTitle extends StatelessWidget {
   const ScreenTitle({super.key, required this.title, this.subtitle});
 
@@ -234,7 +242,11 @@ class ScreenTitle extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             subtitle!,
-            style: TextStyle(fontSize: 14, color: palette.textMuted, height: 1.4),
+            style: TextStyle(
+              fontSize: 14,
+              color: palette.textMuted,
+              height: 1.4,
+            ),
           ),
         ],
       ],
@@ -242,7 +254,7 @@ class ScreenTitle extends StatelessWidget {
   }
 }
 
-/// 목록에서 반복적으로 쓰는 카드 껍데기.
+/// Card container used throughout the lists.
 class AppCard extends StatelessWidget {
   const AppCard({
     super.key,
@@ -256,7 +268,7 @@ class AppCard extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
 
-  /// 상위권 카드처럼 눈에 띄어야 할 때만 넣는다. 없으면 기본 테두리.
+  /// Only for cards that should stand out, such as top ranks. Defaults to the normal border.
   final Color? borderColor;
 
   @override
@@ -287,7 +299,7 @@ class AppCard extends StatelessWidget {
   }
 }
 
-/// 채점 진행률 막대. 얇고 둥글게.
+/// Thin rounded scoring progress bar.
 class ProgressBar extends StatelessWidget {
   const ProgressBar({super.key, required this.value, this.color});
 
@@ -310,7 +322,7 @@ class ProgressBar extends StatelessWidget {
   }
 }
 
-/// 아무것도 없을 때 보여주는 안내 카드. 행동 유도 버튼까지 함께 둔다.
+/// Placeholder card for empty states, with a call-to-action button.
 class EmptyState extends StatelessWidget {
   const EmptyState({
     super.key,
@@ -354,7 +366,11 @@ class EmptyState extends StatelessWidget {
           Text(
             description,
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13.5, color: palette.textMuted, height: 1.5),
+            style: TextStyle(
+              fontSize: 13.5,
+              color: palette.textMuted,
+              height: 1.5,
+            ),
           ),
           if (actionLabel != null && onAction != null) ...[
             const SizedBox(height: 20),
@@ -363,8 +379,13 @@ class EmptyState extends StatelessWidget {
               style: OutlinedButton.styleFrom(
                 foregroundColor: palette.brand,
                 side: BorderSide(color: palette.brand.withValues(alpha: 0.5)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
               ),
               child: Text(
                 actionLabel!,

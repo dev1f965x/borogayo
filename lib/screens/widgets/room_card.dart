@@ -5,10 +5,10 @@ import '../../theme.dart';
 import 'delete_action.dart';
 import 'rank_badge.dart';
 
-/// 방 한 칸을 보여주는 카드. 프로젝트 순위와 건물 안 방 목록이 같은 카드를 쓴다.
+/// Card for one room, used in both the project ranking and a building's room list.
 ///
-/// 등수는 프로젝트 순위에서만 붙인다. 건물 안에서도 번호를 매기면 "이 건물 1위"와
-/// "전체 3위"라는 두 숫자가 같은 방에 붙어서 어느 쪽이 진짜인지 헷갈린다.
+/// Ranks appear only in the project ranking. Numbering rooms inside a building too would put
+/// "#1 in this building" and "#3 overall" on the same room.
 class RoomCard extends StatelessWidget {
   const RoomCard({
     super.key,
@@ -24,11 +24,11 @@ class RoomCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onDelete;
 
-  /// 점수가 나온 방만 등수를 받는다. null이면 자리만 지키는 점으로 그려진다.
+  /// Only scored rooms have a rank; null draws a placeholder dot.
   final int? rank;
   final bool showRank;
 
-  /// 건물을 가로질러 세운 목록에서는 어느 건물의 방인지 함께 보여준다.
+  /// In lists that span buildings, show which building the room is in.
   final bool showBuilding;
 
   @override
@@ -43,10 +43,7 @@ class RoomCard extends StatelessWidget {
       borderColor: medal,
       child: Row(
         children: [
-          if (showRank) ...[
-            RankBadge(rank: rank),
-            const SizedBox(width: 12),
-          ],
+          if (showRank) ...[RankBadge(rank: rank), const SizedBox(width: 12)],
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -82,7 +79,10 @@ class RoomCard extends StatelessWidget {
                       ),
                       Text(
                         '점',
-                        style: TextStyle(fontSize: 12, color: palette.textMuted),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: palette.textMuted,
+                        ),
                       ),
                     ] else
                       Text(
@@ -111,7 +111,7 @@ class RoomCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  // 방을 다 매겼는데도 점수가 `—`면 이유가 건물 쪽이다. 그 말을 여기서 해준다.
+                  // Fully scored room but still `—`: the building is missing ratings, so say so.
                   entry.blockedByBuilding
                       ? '건물 평가를 마치면 점수가 나와요'
                       : done
@@ -119,7 +119,9 @@ class RoomCard extends StatelessWidget {
                       : '${entry.criterionCount}개 중 ${entry.scoredCount}개 채점',
                   style: TextStyle(
                     fontSize: 12.5,
-                    color: entry.blockedByBuilding ? palette.brand : palette.textMuted,
+                    color: entry.blockedByBuilding
+                        ? palette.brand
+                        : palette.textMuted,
                   ),
                 ),
               ],

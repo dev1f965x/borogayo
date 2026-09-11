@@ -12,10 +12,10 @@ import 'widgets/entry_dialog.dart';
 import 'widgets/media_section.dart';
 import 'widgets/room_card.dart';
 
-/// 건물 하나. 건물 공통 항목을 여기서 한 번 채점하고, 방 목록을 관리한다.
+/// One building: scores its shared criteria once and manages its rooms.
 ///
-/// 채점 항목과 방 목록을 한 화면에 이어 붙이면, 방을 하나 보려고 매번 채점 항목
-/// 전부를 스크롤해서 지나가야 한다. 하는 일이 다르니 탭으로 나눈다.
+/// Scoring and the room list do different jobs, and stacking them would mean scrolling
+/// past every criterion to reach a room, so they are separate tabs.
 class BuildingDetailScreen extends StatefulWidget {
   const BuildingDetailScreen({
     super.key,
@@ -43,7 +43,7 @@ class _BuildingDetailScreenState extends State<BuildingDetailScreen>
 
   bool _loading = true;
 
-  /// 이름·메모를 고칠 수 있으므로 넘겨받은 값을 계속 쓰지 않고 여기서 들고 간다.
+  /// Kept here rather than read from the widget, since the name and memo can be edited.
   late Building _building = widget.building;
 
   int get _buildingId => widget.building.id!;
@@ -69,16 +69,21 @@ class _BuildingDetailScreenState extends State<BuildingDetailScreen>
       _projectId,
       scope: CriterionScope.building,
     );
-    final roomCriteria = await db.readCriteria(_projectId, scope: CriterionScope.room);
+    final roomCriteria = await db.readCriteria(
+      _projectId,
+      scope: CriterionScope.room,
+    );
     final scores = await db.readBuildingScores(_buildingId);
-    // 방 카드에 점수를 띄우려면 건물 점수까지 합산한 값이 필요해서 같은 계산을 재사용한다.
+    // Room cards need scores that include the building's ratings, so reuse the ranking query.
     final board = await db.readRoomBoard(_projectId);
 
     if (!mounted) return;
     setState(() {
       _buildingCriteria = buildingCriteria;
       _roomCriteria = roomCriteria;
-      _rooms = board.where((entry) => entry.building.id == _buildingId).toList();
+      _rooms = board
+          .where((entry) => entry.building.id == _buildingId)
+          .toList();
       _draft = ScoreDraft(scores);
       _loading = false;
     });
@@ -91,9 +96,8 @@ class _BuildingDetailScreenState extends State<BuildingDetailScreen>
     setState(_draft.markSaved);
     await _refresh();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('건물 점수를 저장했어요')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('건물 점수를 저장했어요')));
   }
 
   Future<void> _editBuilding() async {
@@ -118,7 +122,11 @@ class _BuildingDetailScreenState extends State<BuildingDetailScreen>
     );
     if (entry == null || !mounted) return;
 
-    await AppDatabase.instance.updateBuilding(_buildingId, entry.name, entry.memo);
+    await AppDatabase.instance.updateBuilding(
+      _buildingId,
+      entry.name,
+      entry.memo,
+    );
     if (!mounted) return;
     HapticFeedback.lightImpact();
     setState(() {
@@ -156,7 +164,7 @@ class _BuildingDetailScreenState extends State<BuildingDetailScreen>
     await _refresh();
     if (!mounted) return;
 
-    // 방을 추가한 직후엔 곧바로 채점하게 되므로 바로 그 화면으로 넘어간다.
+    // A new room is scored right away, so go straight to it.
     final created = _rooms.where((item) => item.room.id == roomId).firstOrNull;
     if (created != null) await _openRoom(created.room);
   }
@@ -174,7 +182,7 @@ class _BuildingDetailScreenState extends State<BuildingDetailScreen>
     await _refresh();
   }
 
-  /// 방 삭제는 자주 일어나고 되돌리기 쉬우므로 확인 대신 실행취소를 제공한다.
+  /// Room deletion is common and easy to reverse, so it offers undo instead of a confirmation.
   Future<void> _deleteRoom(Room room) async {
     final snapshot = await AppDatabase.instance.deleteRoom(room.id!);
     if (!mounted || snapshot == null) return;
@@ -221,8 +229,8 @@ class _BuildingDetailScreenState extends State<BuildingDetailScreen>
               icon: const Icon(Icons.edit_outlined, size: 20),
               tooltip: '건물 수정',
             ),
-            // 채점 항목이 길어서 스크롤을 내리면 하단 버튼이 안 보인다.
-            // 저장은 늘 같은 자리에 있어야 해서 앱바에 둔다.
+            // The criteria list is long enough to push a bottom button off screen,
+            // and save should always be in the same place.
             if (_hasUnsavedChanges)
               Padding(
                 padding: const EdgeInsets.only(right: 8),
@@ -247,7 +255,10 @@ class _BuildingDetailScreenState extends State<BuildingDetailScreen>
             indicatorColor: palette.brand,
             indicatorSize: TabBarIndicatorSize.tab,
             dividerColor: palette.border,
-            labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            labelStyle: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
             tabs: [
               Tab(text: total == 0 ? '건물 평가' : '건물 평가 $scored/$total'),
               Tab(text: '방 ${_rooms.length}'),
@@ -260,7 +271,7 @@ class _BuildingDetailScreenState extends State<BuildingDetailScreen>
                 controller: _tabs,
                 children: [_buildScoringTab(), _buildRoomsTab()],
               ),
-        // 방 탭에서만. 채점하다가 눌릴 자리에 둘 버튼이 아니다.
+        // Rooms tab only; it would sit where taps land while scoring.
         floatingActionButton: _loading || _tabs.index != 1
             ? null
             : FloatingActionButton.extended(
@@ -269,7 +280,10 @@ class _BuildingDetailScreenState extends State<BuildingDetailScreen>
                 foregroundColor: Colors.white,
                 elevation: 0,
                 icon: const Icon(Icons.add),
-                label: const Text('방 추가', style: TextStyle(fontWeight: FontWeight.w600)),
+                label: const Text(
+                  '방 추가',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
               ),
       ),
     );
@@ -301,7 +315,8 @@ class _BuildingDetailScreenState extends State<BuildingDetailScreen>
             CriterionScoreCard(
               criterion: criterion,
               value: _draft.valueOf(criterion.id!),
-              onChanged: (value) => setState(() => _draft.set(criterion.id!, value)),
+              onChanged: (value) =>
+                  setState(() => _draft.set(criterion.id!, value)),
               onCleared: () => setState(() => _draft.clear(criterion.id!)),
             ),
             const SizedBox(height: 10),
@@ -332,8 +347,8 @@ class _BuildingDetailScreenState extends State<BuildingDetailScreen>
         ),
         const SizedBox(height: 16),
         for (final entry in _rooms) ...[
-          // 등수는 프로젝트 순위에서만. 여기서 또 번호를 붙이면 "이 건물 1위"와
-          // "전체 4위"가 한 방에 동시에 붙어 어느 쪽이 진짜인지 흐려진다.
+          // Ranks appear only in the project ranking. Numbering rooms here too would put
+          // "#1 in this building" and "#4 overall" on the same room.
           RoomCard(
             entry: entry,
             onTap: () => _openRoom(entry.room),

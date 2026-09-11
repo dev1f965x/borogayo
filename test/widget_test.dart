@@ -5,11 +5,11 @@ import 'package:borogayo/screens/project_form_screen.dart';
 import 'package:borogayo/screens/widgets/entry_dialog.dart';
 import 'package:borogayo/theme.dart';
 
-/// 목록 만들기 화면은 저장 전까지 DB를 건드리지 않으므로
-/// sqflite 없이 그대로 테스트할 수 있다.
+/// The project form doesn't touch the database until saving,
+/// so it can be tested without sqflite.
 void main() {
   Future<void> pumpForm(WidgetTester tester) async {
-    // 화면이 앱 팔레트(ThemeExtension)를 읽으므로 실제 테마로 띄운다.
+    // Screens read the app palette (ThemeExtension), so use the real theme.
     await tester.pumpWidget(
       MaterialApp(
         theme: buildAppTheme(Brightness.light),
@@ -18,7 +18,7 @@ void main() {
     );
   }
 
-  /// 칩 이름 앞에 이모지가 붙으므로 부분 일치로 찾는다.
+  /// Chip labels start with an emoji, so match partially.
   Finder chip(String name) => find.ancestor(
     of: find.textContaining(name),
     matching: find.byType(InputChip),
@@ -29,23 +29,23 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('건물 기준이 미리 채워져 있다', (tester) async {
+  testWidgets('building criteria are prefilled', (tester) async {
     await pumpForm(tester);
 
     expect(chip('교통'), findsOneWidget);
     expect(chip('주차 가능'), findsOneWidget);
   });
 
-  testWidgets('여부형 기준은 칩에 유형이 함께 표시된다', (tester) async {
+  testWidgets('binary criteria show their type on the chip', (tester) async {
     await pumpForm(tester);
 
     expect(find.textContaining('엘리베이터 · 여부형'), findsOneWidget);
   });
 
-  testWidgets('방 기준은 다른 탭에 따로 있다', (tester) async {
+  testWidgets('room criteria are on a separate tab', (tester) async {
     await pumpForm(tester);
 
-    // 건물 탭에 있는 동안에는 방 기준이 보이지 않는다.
+    // Room criteria stay hidden while the building tab is open.
     expect(chip('채광'), findsNothing);
 
     await openRoomTab(tester);
@@ -55,14 +55,14 @@ void main() {
     expect(chip('교통'), findsNothing);
   });
 
-  testWidgets('탭 이름에 기준 개수가 함께 나온다', (tester) async {
+  testWidgets('tab labels include the criterion count', (tester) async {
     await pumpForm(tester);
 
     expect(find.text('건물 기준 5'), findsOneWidget);
     expect(find.text('방 기준 7'), findsOneWidget);
   });
 
-  testWidgets('필요 없는 기준은 지울 수 있다', (tester) async {
+  testWidgets('unneeded criteria can be removed', (tester) async {
     await pumpForm(tester);
     expect(chip('교통'), findsOneWidget);
 
@@ -75,7 +75,7 @@ void main() {
     expect(find.text('건물 기준 4'), findsOneWidget);
   });
 
-  testWidgets('기준이 하나도 없으면 만들 수 없다', (tester) async {
+  testWidgets('cannot create a project without criteria', (tester) async {
     await pumpForm(tester);
 
     FilledButton createButton() =>
@@ -100,18 +100,21 @@ void main() {
     expect(createButton().onPressed, isNull);
   });
 
-  testWidgets('기준을 추가하면 유형부터 고르게 한다', (tester) async {
+  testWidgets('adding a criterion asks for its type', (tester) async {
     await pumpForm(tester);
 
     final addButton = find.byIcon(Icons.add).first;
     await tester.ensureVisible(addButton);
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.widgetWithText(TextField, '기준 직접 추가').first, '옥상');
+    await tester.enterText(
+      find.widgetWithText(TextField, '기준 직접 추가').first,
+      '옥상',
+    );
     await tester.tap(addButton);
     await tester.pumpAndSettle();
 
-    // 이름을 적은 뒤에야 유형을 묻는다. 입력줄 옆에 늘 띄워두지 않는다.
+    // The type is asked only after a name is entered, not shown next to the field.
     expect(find.textContaining('‘옥상’'), findsOneWidget);
     expect(find.text('점수형'), findsOneWidget);
     expect(find.text('여부형'), findsOneWidget);
@@ -136,7 +139,9 @@ void main() {
       );
     }
 
-    testWidgets('이름이 비면 안내하고 닫히지 않는다', (tester) async {
+    testWidgets('an empty name shows a hint and keeps the dialog open', (
+      tester,
+    ) async {
       await pumpDialog(tester, nameCheck: (_) async => null);
 
       await tester.tap(find.widgetWithText(FilledButton, '추가'));
@@ -145,7 +150,7 @@ void main() {
       expect(find.text('이름을 입력해주세요.'), findsOneWidget);
     });
 
-    testWidgets('이미 있는 이름이면 그 자리에서 막는다', (tester) async {
+    testWidgets('a duplicate name is rejected in place', (tester) async {
       await pumpDialog(tester, nameCheck: (_) async => '같은 이름의 목록이 이미 있어요.');
 
       await tester.enterText(find.byType(TextField), '2026 봄 이사');

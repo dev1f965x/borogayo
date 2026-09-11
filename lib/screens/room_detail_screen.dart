@@ -10,7 +10,7 @@ import 'widgets/entry_dialog.dart';
 import 'widgets/criterion_score_card.dart';
 import 'widgets/media_section.dart';
 
-/// 방 하나를 방 평가 기준대로 채점하고, 사진·영상을 붙인다.
+/// Scores one room against the room criteria and attaches photos and videos.
 class RoomDetailScreen extends StatefulWidget {
   const RoomDetailScreen({
     super.key,
@@ -21,7 +21,7 @@ class RoomDetailScreen extends StatefulWidget {
 
   final Room room;
 
-  /// 사진을 공유할 때 "어느 건물의 방인지"까지 붙여야 받는 쪽이 알아본다.
+  /// Shared photos need the building name too, so the recipient knows which room it is.
   final Building building;
 
   final List<Criterion> criteria;
@@ -36,7 +36,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
   bool _loading = true;
   bool _saving = false;
 
-  /// 이름·메모를 고칠 수 있으므로 넘겨받은 값을 계속 쓰지 않고 여기서 들고 간다.
+  /// Kept here rather than read from the widget, since the name and memo can be edited.
   late Room _room = widget.room;
 
   bool get _hasUnsavedChanges => !_loading && _draft.isDirty;
@@ -66,9 +66,8 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
       _draft.markSaved();
       _saving = false;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('방 점수를 저장했어요')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('방 점수를 저장했어요')));
   }
 
   Future<void> _editRoom() async {
@@ -130,7 +129,7 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
               icon: const Icon(Icons.edit_outlined, size: 20),
               tooltip: '방 수정',
             ),
-            // 건물 채점과 같은 자리에 같은 모양으로. 스크롤을 내려도 계속 보인다.
+            // Same place and style as building scoring, visible while scrolling.
             if (_hasUnsavedChanges)
               Padding(
                 padding: const EdgeInsets.only(right: 8),
@@ -156,15 +155,17 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
                   AppSpacing.page,
                   8,
                   AppSpacing.page,
-                  // 하단 저장 바를 앱바로 옮기면서 화면 맨 아래를 가려주던 것이 없어졌다.
-                  // 제스처 바 높이만큼 더 띄우지 않으면 마지막 카드가 잘린다.
+                  // Clear the gesture bar, or the last card is cut off.
                   32 + MediaQuery.paddingOf(context).bottom,
                 ),
                 children: [
                   if (_room.memo != null && _room.memo!.isNotEmpty) ...[
                     Text(
                       _room.memo!,
-                      style: TextStyle(fontSize: 13.5, color: palette.textMuted),
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        color: palette.textMuted,
+                      ),
                     ),
                     const SizedBox(height: 14),
                   ],
@@ -172,7 +173,10 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
                     children: [
                       Text(
                         '$total개 중 $scored개 채점',
-                        style: TextStyle(fontSize: 13.5, color: palette.textMuted),
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          color: palette.textMuted,
+                        ),
                       ),
                       const Spacer(),
                       if (allDone)
@@ -195,7 +199,10 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
                   if (widget.criteria.isEmpty)
                     Text(
                       '방 평가 기준이 없어요. 목록 화면의 ‘평가 기준’에서 추가할 수 있어요.',
-                      style: TextStyle(fontSize: 13.5, color: palette.textMuted),
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        color: palette.textMuted,
+                      ),
                     )
                   else
                     for (final criterion in widget.criteria) ...[
@@ -204,7 +211,8 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
                         value: _draft.valueOf(criterion.id!),
                         onChanged: (value) =>
                             setState(() => _draft.set(criterion.id!, value)),
-                        onCleared: () => setState(() => _draft.clear(criterion.id!)),
+                        onCleared: () =>
+                            setState(() => _draft.clear(criterion.id!)),
                       ),
                       const SizedBox(height: 10),
                     ],

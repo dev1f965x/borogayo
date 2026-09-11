@@ -39,13 +39,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!ok || !mounted) return;
 
     await AppDatabase.instance.deleteAllProjects();
-    // DB만 비우면 사진 파일이 저장소에 남는다. 참조가 사라졌으니 바로 회수한다.
+    // Clearing the database leaves photo files behind; nothing references them now, so reclaim them.
     await MediaStore.cleanupOrphans(const {});
     if (!mounted) return;
     HapticFeedback.mediumImpact();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('데이터를 모두 지웠어요.')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('데이터를 모두 지웠어요.')));
   }
 
   @override
@@ -55,7 +54,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('설정')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(AppSpacing.page, 8, AppSpacing.page, 32),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.page,
+          8,
+          AppSpacing.page,
+          32,
+        ),
         children: [
           _SectionLabel('화면'),
           const SizedBox(height: 10),
@@ -112,7 +116,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       const SizedBox(height: 2),
                       Text(
                         '기기에만 저장되므로 백업본은 없습니다.',
-                        style: TextStyle(fontSize: 12.5, color: palette.textMuted),
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: palette.textMuted,
+                        ),
                       ),
                     ],
                   ),

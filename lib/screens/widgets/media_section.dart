@@ -13,16 +13,16 @@ import '../media_viewer_screen.dart';
 import 'confirm_dialog.dart';
 import 'media_area_picker.dart';
 
-/// 시트에서 고른 결과. 구역 이름과 어디서 어떤 걸 가져올지.
+/// Choice made in the add sheet: area, and where to take the media from.
 typedef _AddRequest = ({String label, ImageSource source, MediaKind kind});
 
-/// 사진·영상을 옮길 곳. 건물 자신이거나 그 건물의 방 하나.
+/// Where media can be moved: the building itself or one of its rooms.
 typedef _Place = ({int? buildingId, int? roomId, String name});
 
-/// 건물이나 방에 붙는 사진·영상 묶음.
+/// Photos and videos attached to a building or room.
 ///
-/// [room]이 null이면 건물에 붙는 섹션이다. 어느 쪽이든 옮길 후보를 만들어야 해서
-/// 건물은 항상 받는다.
+/// A null [room] means the building's section. The building is always required,
+/// since both cases list it as a place to move media to.
 class MediaSection extends StatefulWidget {
   const MediaSection({super.key, required this.building, this.room});
 
@@ -43,15 +43,15 @@ class _MediaSectionState extends State<MediaSection> {
   int? get _buildingId => widget.room == null ? widget.building.id : null;
   int? get _roomId => widget.room?.id;
 
-  /// 공유할 때 파일과 함께 보낼 맥락. 예: `대성빌라 302호`
+  /// Context sent along when sharing, e.g. `대성빌라 302호`.
   String get _ownerLabel => widget.room == null
       ? widget.building.name
       : '${widget.building.name} ${widget.room!.name}';
 
   List<String> get _labels => areaPresetsFor(isBuilding: widget.room == null);
 
-  /// 실제로 쓰인 구역만 필터로 노출한다. 안 찍은 구역까지 보여주면 산만하다.
-  /// 직접 적은 구역도 그대로 섞인다.
+  /// Only areas actually in use become filters, custom ones included;
+  /// listing empty areas would be noise.
   List<String> get _usedLabels {
     final used = <String>[];
     for (final item in _items) {
@@ -61,11 +61,12 @@ class _MediaSectionState extends State<MediaSection> {
     return used;
   }
 
-  List<MediaItem> get _visibleItems =>
-      _filter == null ? _items : _items.where((item) => item.label == _filter).toList();
+  List<MediaItem> get _visibleItems => _filter == null
+      ? _items
+      : _items.where((item) => item.label == _filter).toList();
 
-  /// 붙일 수 있는 곳 전부. **지금 있는 곳도 포함한다** — 자리는 맞는데 구역만
-  /// 잘못 고른 경우(거실 사진을 주방으로)가 옮기는 것보다 흔하기 때문이다.
+  /// Every place media can go, **including where it is now**: fixing a wrong area
+  /// (living room shot filed under kitchen) is more common than moving it elsewhere.
   List<_Place> get _places => [
     (buildingId: widget.building.id, roomId: null, name: widget.building.name),
     for (final sibling in _siblings)
@@ -86,7 +87,7 @@ class _MediaSectionState extends State<MediaSection> {
     setState(() {
       _items = items;
       _siblings = siblings;
-      // 필터로 잡아둔 구역의 사진을 모두 지웠다면 필터를 풀어준다.
+      // Clear the filter once its area has no media left.
       if (_filter != null && !items.any((item) => item.label == _filter)) {
         _filter = null;
       }
@@ -134,9 +135,8 @@ class _MediaSectionState extends State<MediaSection> {
       await _refresh();
     } on Exception {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('불러오지 못했어요. 다시 시도해주세요.')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('불러오지 못했어요. 다시 시도해주세요.')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -156,13 +156,13 @@ class _MediaSectionState extends State<MediaSection> {
     await _refresh();
   }
 
-  /// 지금 화면에 보이는 것들을 보낸다. 필터를 걸어두면 그게 곧 고르는 도구가 되므로
-  /// 여러 장을 고르는 별도 선택 모드를 두지 않는다.
+  /// Shares what's currently visible. The filter doubles as the selection tool,
+  /// so there's no separate multi-select mode.
   Future<void> _share() async {
     await shareMedia(context, ownerLabel: _ownerLabel, items: _visibleItems);
   }
 
-  /// 길게 누르면 나오는 메뉴.
+  /// Long-press menu.
   Future<void> _showItemMenu(MediaItem item) async {
     final palette = context.palette;
     final kind = item.kind == MediaKind.photo ? '사진' : '영상';
@@ -249,7 +249,9 @@ class _MediaSectionState extends State<MediaSection> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          moved ? '‘${result.place.name}’(으)로 옮겼어요' : '‘${result.label}’(으)로 바꿨어요',
+          moved
+              ? '‘${result.place.name}’(으)로 옮겼어요'
+              : '‘${result.label}’(으)로 바꿨어요',
         ),
       ),
     );
@@ -371,9 +373,9 @@ class _MediaSectionState extends State<MediaSection> {
   }
 }
 
-/// 구역을 먼저 고르고 촬영/선택으로 이어지는 한 장짜리 시트.
+/// Single sheet that picks the area first and then captures or chooses media.
 ///
-/// 구역을 나중에 따로 묻는 단계로 만들면 현장에서 귀찮아 안 쓰게 된다.
+/// Asking for the area as a separate later step gets skipped on site.
 class _AddMediaSheet extends StatefulWidget {
   const _AddMediaSheet({required this.labels, this.initialLabel});
 
@@ -409,7 +411,9 @@ class _AddMediaSheetState extends State<_AddMediaSheet> {
 
     return SafeArea(
       child: SingleChildScrollView(
-        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -434,8 +438,18 @@ class _AddMediaSheetState extends State<_AddMediaSheet> {
             ),
             const SizedBox(height: 12),
             for (final option in const [
-              (Icons.photo_camera_outlined, '사진 촬영', ImageSource.camera, MediaKind.photo),
-              (Icons.videocam_outlined, '영상 촬영', ImageSource.camera, MediaKind.video),
+              (
+                Icons.photo_camera_outlined,
+                '사진 촬영',
+                ImageSource.camera,
+                MediaKind.photo,
+              ),
+              (
+                Icons.videocam_outlined,
+                '영상 촬영',
+                ImageSource.camera,
+                MediaKind.video,
+              ),
               (
                 Icons.photo_library_outlined,
                 '갤러리에서 사진',
@@ -472,7 +486,7 @@ class _AddMediaSheetState extends State<_AddMediaSheet> {
   }
 }
 
-/// 붙은 곳과 구역을 고치는 시트. 자리를 옮기면 구역 이름 체계도 바뀌므로 함께 고른다.
+/// Sheet for changing where media is attached and its area; moving changes the area names, so both are chosen together.
 class _EditMediaSheet extends StatefulWidget {
   const _EditMediaSheet({
     required this.places,
@@ -494,7 +508,7 @@ class _EditMediaSheetState extends State<_EditMediaSheet> {
 
   AreaPickerController _pickerFor(_Place place) => AreaPickerController(
     labels: areaPresetsFor(isBuilding: place.buildingId != null),
-    // 옮겨도 뜻이 통하는 구역 이름이면 그대로 이어 쓴다.
+    // Keep the area name when it still makes sense at the new place.
     initial: widget.currentLabel,
   );
 
@@ -569,7 +583,7 @@ class _EditMediaSheetState extends State<_EditMediaSheet> {
             const SizedBox(height: 18),
             label('구역'),
             AreaPicker(
-              // 옮길 곳이 바뀌면 구역 후보도 통째로 바뀌므로 위젯을 새로 세운다.
+              // A different place has a different set of areas, so rebuild the picker.
               key: ValueKey(_place),
               controller: _picker,
               onChanged: () => setState(() {}),
@@ -614,9 +628,13 @@ class _FilterChip extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: selected ? palette.brand.withValues(alpha: 0.14) : palette.surface,
+            color: selected
+                ? palette.brand.withValues(alpha: 0.14)
+                : palette.surface,
             borderRadius: BorderRadius.circular(99),
-            border: Border.all(color: selected ? palette.brand : palette.border),
+            border: Border.all(
+              color: selected ? palette.brand : palette.border,
+            ),
           ),
           child: Text(
             label,
@@ -668,11 +686,14 @@ class _Thumbnail extends StatelessWidget {
                       errorBuilder: (_, _, _) => Container(
                         color: palette.border,
                         alignment: Alignment.center,
-                        child: Icon(Icons.broken_image_outlined, color: palette.textMuted),
+                        child: Icon(
+                          Icons.broken_image_outlined,
+                          color: palette.textMuted,
+                        ),
                       ),
                     ),
             ),
-            // 썸네일이 생기고 나면 영상도 사진처럼 보인다. 종류는 이 뱃지로 구분한다.
+            // With a thumbnail a video looks like a photo; this badge tells them apart.
             Positioned(
               right: 5,
               top: 5,
@@ -689,17 +710,24 @@ class _Thumbnail extends StatelessWidget {
                 ),
               ),
             ),
-            // 썸네일을 못 뽑은 영상은 그냥 검은 타일이 되므로 재생 표시를 남긴다.
+            // A video without a thumbnail is a black tile, so keep the play icon.
             if (isVideo && preview == null)
               const Center(
-                child: Icon(Icons.play_circle_outline, color: Colors.white, size: 30),
+                child: Icon(
+                  Icons.play_circle_outline,
+                  color: Colors.white,
+                  size: 30,
+                ),
               ),
             if (item.label != null)
               Positioned(
                 left: 5,
                 bottom: 5,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.black.withValues(alpha: 0.62),
                     borderRadius: BorderRadius.circular(99),

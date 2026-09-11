@@ -9,7 +9,7 @@ import 'widgets/criterion_composer.dart';
 import 'widgets/entry_dialog.dart';
 import 'widgets/delete_action.dart';
 
-/// 평가 기준 수정. 건물용/방용을 나눠서 보여주고, 중요도를 조절한다.
+/// Edits criteria, grouped into building and room criteria, including their weights.
 class CriteriaEditScreen extends StatefulWidget {
   const CriteriaEditScreen({super.key, required this.projectId});
 
@@ -40,9 +40,8 @@ class _CriteriaEditScreenState extends State<CriteriaEditScreen> {
 
   Future<void> _add(CriterionDraft draft) async {
     if (_criteria.any((c) => c.name == draft.name)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('‘${draft.name}’은(는) 이미 있어요')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('‘${draft.name}’은(는) 이미 있어요')));
       return;
     }
 
@@ -52,10 +51,10 @@ class _CriteriaEditScreenState extends State<CriteriaEditScreen> {
     await _refresh();
   }
 
-  /// 이름·이모지·유형을 고친다. 만들 때와 정할 것이 같아서 같은 시트를 쓴다.
+  /// Edits name, emoji, and type with the same sheet used for creating.
   ///
-  /// 건물용↔방용(범위)만은 못 바꾼다. 건물 점수는 건물에 하나뿐이고 방 점수는 방마다라
-  /// 옮길 곳이 정해지지 않는다. 그건 지우고 새로 만드는 편이 정직하다.
+  /// Scope can't change: a building has one score per criterion while rooms each have
+  /// their own, so there's no sensible way to move them. Delete and recreate instead.
   Future<void> _edit(Criterion criterion) async {
     final db = AppDatabase.instance;
 
@@ -84,9 +83,10 @@ class _CriteriaEditScreenState extends State<CriteriaEditScreen> {
     );
     if (draft == null || !mounted) return;
 
-    // 7.5점처럼 있음/없음으로 옮길 수 없는 값이 남으면 화면이 설명할 수 없는 상태가 된다.
+    // Values like 7.5 can't be expressed as yes/no, so warn before converting.
     final toBinary =
-        criterion.type == CriterionType.scale && draft.type == CriterionType.binary;
+        criterion.type == CriterionType.scale &&
+        draft.type == CriterionType.binary;
     if (toBinary && await db.hasScoresFor(criterion.id!)) {
       if (!mounted) return;
       final ok = await confirmDestructive(
@@ -118,11 +118,13 @@ class _CriteriaEditScreenState extends State<CriteriaEditScreen> {
 
   Future<void> _changeWeight(Criterion criterion, int weight) async {
     HapticFeedback.selectionClick();
-    await AppDatabase.instance.updateCriterion(criterion.copyWith(weight: weight));
+    await AppDatabase.instance.updateCriterion(
+      criterion.copyWith(weight: weight),
+    );
     await _refresh();
   }
 
-  /// 기준을 지우면 그 기준으로 매긴 모든 점수가 함께 사라지므로 확인을 받는다.
+  /// Deleting a criterion removes every score given with it, so it asks first.
   Future<void> _delete(Criterion criterion) async {
     final ok = await confirmDestructive(
       context,
@@ -154,7 +156,11 @@ class _CriteriaEditScreenState extends State<CriteriaEditScreen> {
               children: [
                 Text(
                   '중요도가 높은 기준일수록 순위에 더 크게 반영됩니다.',
-                  style: TextStyle(fontSize: 13.5, color: palette.textMuted, height: 1.4),
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    color: palette.textMuted,
+                    height: 1.4,
+                  ),
                 ),
                 const SizedBox(height: 20),
                 _ScopeSection(
@@ -174,7 +180,9 @@ class _CriteriaEditScreenState extends State<CriteriaEditScreen> {
                   scope: CriterionScope.room,
                   title: '방 평가 기준',
                   description: '방마다 매깁니다.',
-                  criteria: _criteria.where((c) => c.scope == CriterionScope.room).toList(),
+                  criteria: _criteria
+                      .where((c) => c.scope == CriterionScope.room)
+                      .toList(),
                   onAdd: _add,
                   onEdit: _edit,
                   onWeightChanged: _changeWeight,
@@ -278,7 +286,10 @@ class _CriterionRow extends StatelessWidget {
                 Row(
                   children: [
                     if (criterion.emoji != null) ...[
-                      Text(criterion.emoji!, style: const TextStyle(fontSize: 16)),
+                      Text(
+                        criterion.emoji!,
+                        style: const TextStyle(fontSize: 16),
+                      ),
                       const SizedBox(width: 6),
                     ],
                     Expanded(
@@ -302,10 +313,13 @@ class _CriterionRow extends StatelessWidget {
                   children: [
                     Text(
                       '중요도',
-                      style: TextStyle(fontSize: 12.5, color: palette.textMuted),
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: palette.textMuted,
+                      ),
                     ),
                     const Spacer(),
-                    // 1~5 중 하나. 세그먼트로 노출해 한 번의 탭으로 바꾸게 한다.
+                    // Weight 1–5 as segments, so changing it takes one tap.
                     for (var weight = 1; weight <= 5; weight++)
                       GestureDetector(
                         onTap: () => onWeightChanged(weight),

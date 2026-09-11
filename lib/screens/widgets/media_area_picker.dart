@@ -4,11 +4,11 @@ import 'package:flutter/services.dart';
 import '../../models/models.dart';
 import '../../theme.dart';
 
-/// 건물에 붙는 사진인지, 방에 붙는 사진인지에 따라 구역 후보가 다르다.
+/// Area suggestions differ for building and room media.
 List<String> areaPresetsFor({required bool isBuilding}) =>
     isBuilding ? kBuildingMediaLabels : kRoomMediaLabels;
 
-/// 고른 구역 이름을 들고 있는다. 미리 깔아둔 것 중 하나이거나, 직접 적은 문자열.
+/// Holds the chosen area: one of the presets or a custom string.
 class AreaPickerController {
   AreaPickerController({required this.labels, String? initial})
     : custom = initial != null && !labels.contains(initial),
@@ -27,13 +27,17 @@ class AreaPickerController {
   void dispose() => customController.dispose();
 }
 
-/// 구역 칩 + '직접 입력'. 사진을 새로 붙일 때와 다른 곳으로 옮길 때 같은 걸 쓴다.
+/// Area chips plus custom input, used both when adding media and when moving it.
 class AreaPicker extends StatelessWidget {
-  const AreaPicker({super.key, required this.controller, required this.onChanged});
+  const AreaPicker({
+    super.key,
+    required this.controller,
+    required this.onChanged,
+  });
 
   final AreaPickerController controller;
 
-  /// 고른 값이 바뀌면 부모가 다시 그리도록 알린다.
+  /// Tells the parent to rebuild when the choice changes.
   final VoidCallback onChanged;
 
   @override
@@ -84,7 +88,7 @@ class AreaPicker extends StatelessWidget {
   }
 }
 
-/// 시트 안에서 쓰는 알약 모양 선택 칩.
+/// Pill-shaped choice chip used inside sheets.
 class AreaChoiceChip extends StatelessWidget {
   const AreaChoiceChip({
     super.key,
@@ -116,7 +120,11 @@ class AreaChoiceChip extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (icon != null) ...[
-              Icon(icon, size: 14, color: selected ? Colors.white : palette.textMuted),
+              Icon(
+                icon,
+                size: 14,
+                color: selected ? Colors.white : palette.textMuted,
+              ),
               const SizedBox(width: 4),
             ],
             Text(

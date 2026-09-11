@@ -4,10 +4,11 @@ import 'package:flutter/services.dart';
 import '../../models/models.dart';
 import '../../theme.dart';
 
-String formatScore(double value) =>
-    value == value.roundToDouble() ? value.toInt().toString() : value.toStringAsFixed(1);
+String formatScore(double value) => value == value.roundToDouble()
+    ? value.toInt().toString()
+    : value.toStringAsFixed(1);
 
-/// 기준 하나에 점수를 매기는 카드. 건물 채점과 방 채점이 같은 위젯을 쓴다.
+/// Card for scoring one criterion, shared by building and room scoring.
 class CriterionScoreCard extends StatelessWidget {
   const CriterionScoreCard({
     super.key,
@@ -19,11 +20,11 @@ class CriterionScoreCard extends StatelessWidget {
 
   final Criterion criterion;
 
-  /// 아직 매기지 않았으면 null. 화면에서는 흐린 `0`으로 두어 "안 건드림"이 보이게 한다.
+  /// Null while unscored, shown as a dimmed `0` so untouched criteria stand out.
   final double? value;
   final ValueChanged<double> onChanged;
 
-  /// 잘못 건드린 값을 다시 '안 매김'으로 되돌린다.
+  /// Resets an accidental value to unscored.
   final VoidCallback onCleared;
 
   @override
@@ -53,8 +54,8 @@ class CriterionScoreCard extends StatelessWidget {
               const SizedBox(width: 8),
               _Pill(text: '중요도 ${criterion.weight}', color: palette.brand),
               const Spacer(),
-              // 매긴 뒤에만 나온다. 슬라이더는 스치기만 해도 값이 들어가서
-              // 되돌릴 길이 없으면 실수 한 번에 그 방 점수가 계속 막힌다.
+              // Only once scored. A slider takes a value on the lightest touch, and without
+              // a way back a single slip would keep the room's score blocked.
               if (value != null)
                 GestureDetector(
                   onTap: () {
@@ -63,7 +64,10 @@ class CriterionScoreCard extends StatelessWidget {
                   },
                   behavior: HitTestBehavior.opaque,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 2,
+                    ),
                     child: Text(
                       '지우기',
                       style: TextStyle(
@@ -111,7 +115,9 @@ class _BinaryInput extends StatelessWidget {
             decoration: BoxDecoration(
               color: selected ? palette.brand : palette.background,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: selected ? palette.brand : palette.border),
+              border: Border.all(
+                color: selected ? palette.brand : palette.border,
+              ),
             ),
             alignment: Alignment.center,
             child: Text(
@@ -157,7 +163,7 @@ class _ScaleInput extends StatelessWidget {
               value: value ?? 0,
               min: 0,
               max: kMaxScore,
-              // 0.5 단위. 현장에서 빠르게 정할 수 있을 만큼만 잘게 나눈다.
+              // 0.5 steps: fine enough, still quick to set on site.
               divisions: (kMaxScore * 2).toInt(),
               label: formatScore(value ?? 0),
               onChanged: (next) {
@@ -167,7 +173,7 @@ class _ScaleInput extends StatelessWidget {
             ),
           ),
         ),
-        // 숫자는 여기 한 곳에만. 카드 위쪽에도 같은 값을 띄우면 눈이 두 군데를 오간다.
+        // The number appears only here; repeating it above would split attention.
         SizedBox(
           width: 32,
           child: Text(
@@ -201,7 +207,11 @@ class _Pill extends StatelessWidget {
       ),
       child: Text(
         text,
-        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color),
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
       ),
     );
   }

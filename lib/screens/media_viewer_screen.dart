@@ -6,7 +6,7 @@ import 'package:video_player/video_player.dart';
 import '../media/media_share.dart';
 import '../models/models.dart';
 
-/// 사진·영상 전체화면 뷰어. 좌우로 넘겨서 본다.
+/// Full-screen photo and video viewer with horizontal paging.
 class MediaViewerScreen extends StatefulWidget {
   const MediaViewerScreen({
     super.key,
@@ -18,7 +18,7 @@ class MediaViewerScreen extends StatefulWidget {
   final List<MediaItem> items;
   final int initialIndex;
 
-  /// 공유할 때 파일과 함께 보낼 맥락. 예: `대성빌라 302호`
+  /// Context sent along when sharing, e.g. `대성빌라 302호`.
   final String ownerLabel;
 
   @override
@@ -26,7 +26,9 @@ class MediaViewerScreen extends StatefulWidget {
 }
 
 class _MediaViewerScreenState extends State<MediaViewerScreen> {
-  late final PageController _controller = PageController(initialPage: widget.initialIndex);
+  late final PageController _controller = PageController(
+    initialPage: widget.initialIndex,
+  );
   late int _index = widget.initialIndex;
 
   @override
@@ -83,7 +85,7 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
                     ),
                   ),
                 )
-              // 옆 페이지도 미리 만들어두므로, 지금 보고 있는 것만 재생되게 알려준다.
+              // Neighboring pages are built ahead, so only the visible one should play.
               : _VideoPage(path: item.path, active: index == _index);
         },
       ),
@@ -114,7 +116,7 @@ class _VideoPageState extends State<_VideoPage> {
   @override
   void didUpdateWidget(_VideoPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // 넘겨버린 영상이 소리만 계속 나는 일이 없도록.
+    // Keep a video that was swiped away from playing on in the background.
     if (!widget.active) _controller?.pause();
   }
 
@@ -149,7 +151,9 @@ class _VideoPageState extends State<_VideoPage> {
 
     final controller = _controller;
     if (controller == null) {
-      return const Center(child: CircularProgressIndicator(color: Colors.white));
+      return const Center(
+        child: CircularProgressIndicator(color: Colors.white),
+      );
     }
 
     return Center(
@@ -161,7 +165,9 @@ class _VideoPageState extends State<_VideoPage> {
             Positioned.fill(
               child: GestureDetector(
                 onTap: () => setState(() {
-                  controller.value.isPlaying ? controller.pause() : controller.play();
+                  controller.value.isPlaying
+                      ? controller.pause()
+                      : controller.play();
                 }),
                 child: AnimatedOpacity(
                   opacity: controller.value.isPlaying ? 0 : 1,
@@ -178,7 +184,7 @@ class _VideoPageState extends State<_VideoPage> {
                 ),
               ),
             ),
-            // 자리를 안 잡아주면 영상 한가운데를 가로지르는 선이 된다.
+            // Unpositioned, the bar would stretch across the middle of the video.
             Positioned(
               left: 0,
               right: 0,

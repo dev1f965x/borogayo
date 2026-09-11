@@ -6,12 +6,16 @@ import '../models/models.dart';
 import '../theme.dart';
 import 'widgets/criterion_composer.dart';
 
-/// 집 볼 때 흔히 확인하는 것들. 빈 화면에서 시작하지 않도록 미리 채워둔다.
+/// Common things to check when viewing a place, so a new project doesn't start empty.
 ///
-/// 건물 항목은 같은 건물의 방 여러 개를 봐도 한 번만 매기면 되는 것들이고,
-/// 방 항목은 방마다 달라지는 것들이다.
+/// Building criteria are rated once for all rooms in a building; room criteria differ per room.
 const _presets = <CriterionDraft>[
-  (name: '교통', scope: CriterionScope.building, type: CriterionType.scale, emoji: '🚇'),
+  (
+    name: '교통',
+    scope: CriterionScope.building,
+    type: CriterionType.scale,
+    emoji: '🚇',
+  ),
   (
     name: '주변 편의시설',
     scope: CriterionScope.building,
@@ -36,19 +40,54 @@ const _presets = <CriterionDraft>[
     type: CriterionType.binary,
     emoji: '🛗',
   ),
-  (name: '채광', scope: CriterionScope.room, type: CriterionType.scale, emoji: '☀️'),
-  (name: '소음', scope: CriterionScope.room, type: CriterionType.scale, emoji: '🔊'),
-  (name: '수압', scope: CriterionScope.room, type: CriterionType.scale, emoji: '🚿'),
-  (name: '곰팡이·결로', scope: CriterionScope.room, type: CriterionType.scale, emoji: '💧'),
-  (name: '방 크기', scope: CriterionScope.room, type: CriterionType.scale, emoji: '📐'),
-  (name: '가격', scope: CriterionScope.room, type: CriterionType.scale, emoji: '💰'),
-  (name: '풀옵션', scope: CriterionScope.room, type: CriterionType.binary, emoji: '🛋️'),
+  (
+    name: '채광',
+    scope: CriterionScope.room,
+    type: CriterionType.scale,
+    emoji: '☀️',
+  ),
+  (
+    name: '소음',
+    scope: CriterionScope.room,
+    type: CriterionType.scale,
+    emoji: '🔊',
+  ),
+  (
+    name: '수압',
+    scope: CriterionScope.room,
+    type: CriterionType.scale,
+    emoji: '🚿',
+  ),
+  (
+    name: '곰팡이·결로',
+    scope: CriterionScope.room,
+    type: CriterionType.scale,
+    emoji: '💧',
+  ),
+  (
+    name: '방 크기',
+    scope: CriterionScope.room,
+    type: CriterionType.scale,
+    emoji: '📐',
+  ),
+  (
+    name: '가격',
+    scope: CriterionScope.room,
+    type: CriterionType.scale,
+    emoji: '💰',
+  ),
+  (
+    name: '풀옵션',
+    scope: CriterionScope.room,
+    type: CriterionType.binary,
+    emoji: '🛋️',
+  ),
 ];
 
-/// 새 목록의 평가 기준을 정하는 화면. 이름은 앞선 팝업에서 이미 받았다.
+/// Sets up a new project's criteria. The name was already entered in the preceding dialog.
 ///
-/// 건물용과 방용을 위아래로 이어 붙이면 둘 다 스크롤 밖으로 밀려 어느 쪽을 보고 있는지
-/// 헷갈린다. 탭으로 나눠 한 번에 한 쪽만 보게 한다.
+/// Building and room criteria are separate tabs; one long list makes it hard to tell
+/// which section you're in.
 class ProjectFormScreen extends StatefulWidget {
   const ProjectFormScreen({super.key, required this.name});
 
@@ -76,9 +115,8 @@ class _ProjectFormScreenState extends State<ProjectFormScreen>
 
   void _add(CriterionDraft draft) {
     if (_criteria.any((c) => c.name == draft.name)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('‘${draft.name}’은(는) 이미 있어요')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('‘${draft.name}’은(는) 이미 있어요')));
       return;
     }
 
@@ -110,7 +148,10 @@ class _ProjectFormScreenState extends State<ProjectFormScreen>
           indicatorColor: palette.brand,
           indicatorSize: TabBarIndicatorSize.tab,
           dividerColor: palette.border,
-          labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          labelStyle: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
           tabs: [
             Tab(text: '건물 기준 ${_of(CriterionScope.building).length}'),
             Tab(text: '방 기준 ${_of(CriterionScope.room).length}'),
@@ -180,7 +221,12 @@ class _CriteriaTab extends StatelessWidget {
     final palette = context.palette;
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(AppSpacing.page, 16, AppSpacing.page, 24),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.page,
+        16,
+        AppSpacing.page,
+        24,
+      ),
       children: [
         Text(
           description,
@@ -213,7 +259,10 @@ class _CriteriaTab extends StatelessWidget {
                             if (draft.type == CriterionType.binary) '· 여부형',
                           ].join(' '),
                         ),
-                        labelStyle: TextStyle(fontSize: 13.5, color: palette.textBody),
+                        labelStyle: TextStyle(
+                          fontSize: 13.5,
+                          color: palette.textBody,
+                        ),
                         backgroundColor: palette.background,
                         side: BorderSide(color: palette.border),
                         shape: RoundedRectangleBorder(

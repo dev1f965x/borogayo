@@ -2,16 +2,16 @@ import 'package:flutter/material.dart';
 
 import '../../theme.dart';
 
-/// 1~3위에만 쓰는 메달 색. 그 밖에는 null.
+/// Medal color for ranks 1–3, otherwise null.
 Color? medalColor(int? rank) =>
     rank != null && rank >= 1 && rank <= kMedalColors.length
     ? kMedalColors[rank - 1]
     : null;
 
-/// 목록 카드 왼쪽에 붙는 등수 동그라미.
+/// Rank circle on the left of a list card.
 ///
-/// 상위 세 곳은 색으로, 나머지는 숫자만. 아직 아무 점수도 없어 순위가 의미 없을 때는
-/// [rank]에 null을 넘기면 자리만 지키는 점으로 그린다.
+/// The top three get medal colors, the rest a number. Pass a null [rank] when ranking
+/// isn't meaningful yet to draw a placeholder dot.
 class RankBadge extends StatelessWidget {
   const RankBadge({super.key, required this.rank, this.size = 30});
 

@@ -8,10 +8,12 @@ import 'theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // 저장된 테마를 먼저 읽어야 첫 프레임부터 올바른 밝기로 그려진다.
+  // Load the saved theme first so the first frame already uses the right brightness.
   await ThemeController.instance.load();
-  // 되돌리지 않은 방 삭제 등으로 남은 미디어 파일을 회수한다.
-  await MediaStore.cleanupOrphans(await AppDatabase.instance.readAllMediaPaths());
+  // Reclaim media files left behind, e.g. by room deletions that weren't undone.
+  await MediaStore.cleanupOrphans(
+    await AppDatabase.instance.readAllMediaPaths(),
+  );
   runApp(const BorogayoApp());
 }
 

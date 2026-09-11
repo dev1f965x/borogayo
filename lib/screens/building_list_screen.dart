@@ -9,10 +9,10 @@ import 'widgets/confirm_dialog.dart';
 import 'widgets/delete_action.dart';
 import 'widgets/entry_dialog.dart';
 
-/// 건물 관리 화면.
+/// Building management.
 ///
-/// 건물은 점수를 갖지 않으므로 순위에 낄 자리가 없고, 한 번 만들어두면 공통 평가를
-/// 매길 때 말고는 거의 건드리지 않는다. 그래서 상시 화면에서 빼 여기로 모았다.
+/// Buildings have no score and aren't ranked, and once created they're rarely touched
+/// except to rate shared criteria, so they live here instead of on the main screen.
 class BuildingListScreen extends StatefulWidget {
   const BuildingListScreen({super.key, required this.project});
 
@@ -35,7 +35,9 @@ class _BuildingListScreenState extends State<BuildingListScreen> {
   }
 
   Future<void> _refresh() async {
-    final buildings = await AppDatabase.instance.readBuildingSummaries(_projectId);
+    final buildings = await AppDatabase.instance.readBuildingSummaries(
+      _projectId,
+    );
     if (!mounted) return;
     setState(() {
       _buildings = buildings;
@@ -67,7 +69,7 @@ class _BuildingListScreenState extends State<BuildingListScreen> {
     await _refresh();
     if (!mounted) return;
 
-    // 건물을 만들었다면 공통 평가를 매기러 온 것이므로 바로 그 화면으로 넘어간다.
+    // A new building is created to rate its shared criteria, so go straight to it.
     final created = _buildings
         .where((summary) => summary.building.id == buildingId)
         .firstOrNull;
@@ -77,13 +79,14 @@ class _BuildingListScreenState extends State<BuildingListScreen> {
   Future<void> _open(Building building) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
-        builder: (_) => BuildingDetailScreen(project: widget.project, building: building),
+        builder: (_) =>
+            BuildingDetailScreen(project: widget.project, building: building),
       ),
     );
     await _refresh();
   }
 
-  /// 건물을 지우면 그 안의 방·점수·사진이 전부 사라지므로 확인을 받는다.
+  /// Deleting a building removes all its rooms, scores, and photos, so it asks first.
   Future<void> _confirmDelete(Building building) async {
     final ok = await confirmDestructive(
       context,
@@ -142,7 +145,10 @@ class _BuildingListScreenState extends State<BuildingListScreen> {
               foregroundColor: Colors.white,
               elevation: 0,
               icon: const Icon(Icons.add),
-              label: const Text('건물 추가', style: TextStyle(fontWeight: FontWeight.w600)),
+              label: const Text(
+                '건물 추가',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
             ),
     );
   }
@@ -198,7 +204,10 @@ class _BuildingCard extends StatelessWidget {
                     const SizedBox(width: 4),
                     Text(
                       '방 ${summary.roomCount}칸',
-                      style: TextStyle(fontSize: 12.5, color: palette.textMuted),
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: palette.textMuted,
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Icon(
