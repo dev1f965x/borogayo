@@ -9,12 +9,18 @@ import '../../theme.dart';
 ///
 /// The first tap slides out a red delete button and the second one deletes. Lists get
 /// brushed while scrolling, so it takes two taps, but without a dialog in the way.
-/// It collapses by itself after a moment, so there's no cancel button.
+/// It collapses after a moment or when anything else is touched.
 class DeleteAction extends StatefulWidget {
-  const DeleteAction({super.key, required this.onConfirm, this.label = '삭제'});
+  const DeleteAction({super.key, required this.onConfirm});
 
   final VoidCallback onConfirm;
-  final String label;
+
+  /// Collapses an open delete button when a touch lands outside it. Wraps the whole app.
+  static Widget collapseOnOutsideTouch({required Widget child}) => Listener(
+    behavior: HitTestBehavior.translucent,
+    onPointerDown: _DeleteActionState._collapseUnlessInside,
+    child: child,
+  );
 
   @override
   State<DeleteAction> createState() => _DeleteActionState();
@@ -22,30 +28,50 @@ class DeleteAction extends StatefulWidget {
 
 class _DeleteActionState extends State<DeleteAction> {
   static const _collapsedWidth = 40.0;
-  static const _expandedWidth = 78.0;
+  static const _expandedWidth = 76.0;
   static const _height = 36.0;
 
+  /// Only one button is open at a time.
+  static _DeleteActionState? _open;
+
+  static void _collapseUnlessInside(PointerDownEvent event) {
+    final open = _open;
+    if (open == null || !open.mounted) return;
+    final box = open.context.findRenderObject() as RenderBox?;
+    if (box != null &&
+        box.hasSize &&
+        (box.localToGlobal(Offset.zero) & box.size).contains(event.position)) {
+      return;
+    }
+    open._collapse();
+  }
+
   bool _armed = false;
-  Timer? _disarmTimer;
+  Timer? _collapseTimer;
 
   @override
   void dispose() {
-    _disarmTimer?.cancel();
+    _collapseTimer?.cancel();
+    if (_open == this) _open = null;
     super.dispose();
   }
 
   void _arm() {
     HapticFeedback.selectionClick();
+    _open?._collapse();
+    _open = this;
     setState(() => _armed = true);
-    _disarmTimer?.cancel();
-    _disarmTimer = Timer(const Duration(seconds: 3), () {
-      if (mounted) setState(() => _armed = false);
-    });
+    _collapseTimer = Timer(const Duration(seconds: 3), _collapse);
+  }
+
+  void _collapse() {
+    _collapseTimer?.cancel();
+    if (_open == this) _open = null;
+    if (mounted && _armed) setState(() => _armed = false);
   }
 
   void _confirm() {
-    _disarmTimer?.cancel();
-    setState(() => _armed = false);
+    _collapse();
     HapticFeedback.mediumImpact();
     widget.onConfirm();
   }
@@ -69,43 +95,42 @@ class _DeleteActionState extends State<DeleteAction> {
           color: _armed ? palette.danger : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
         ),
-        // Lets the content clip while the width shrinks instead of throwing an overflow error.
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          reverse: true,
-          physics: const NeverScrollableScrollPhysics(),
-          child: _armed
-              ? Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.delete_outline,
-                        size: 16,
-                        color: Colors.white,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        widget.label,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
+        // The content takes its final width right away and is centered in it, while the
+        // animating container clips it from the left.
+        child: OverflowBox(
+          alignment: Alignment.centerRight,
+          maxWidth: _expandedWidth,
+          child: SizedBox(
+            width: _armed ? _expandedWidth : _collapsedWidth,
+            height: _height,
+            child: Center(
+              child: _armed
+                  ? const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.delete_outline,
+                          size: 16,
                           color: Colors.white,
                         ),
-                      ),
-                    ],
-                  ),
-                )
-              : SizedBox(
-                  width: _collapsedWidth,
-                  height: _height,
-                  child: Icon(
-                    Icons.delete_outline,
-                    size: 20,
-                    color: palette.textMuted,
-                  ),
-                ),
+                        SizedBox(width: 3),
+                        Text(
+                          '삭제',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    )
+                  : Icon(
+                      Icons.delete_outline,
+                      size: 20,
+                      color: palette.textMuted,
+                    ),
+            ),
+          ),
         ),
       ),
     );

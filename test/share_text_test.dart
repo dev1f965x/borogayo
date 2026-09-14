@@ -9,7 +9,6 @@ MediaItem photo(String? label) => MediaItem(
   path: '/tmp/a.jpg',
   kind: MediaKind.photo,
   label: label,
-  createdAt: DateTime(2026),
 );
 
 void main() {

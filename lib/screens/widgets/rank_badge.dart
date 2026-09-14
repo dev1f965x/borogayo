@@ -13,10 +13,11 @@ Color? medalColor(int? rank) =>
 /// The top three get medal colors, the rest a number. Pass a null [rank] when ranking
 /// isn't meaningful yet to draw a placeholder dot.
 class RankBadge extends StatelessWidget {
-  const RankBadge({super.key, required this.rank, this.size = 30});
+  const RankBadge({super.key, required this.rank});
+
+  static const _size = 30.0;
 
   final int? rank;
-  final double size;
 
   @override
   Widget build(BuildContext context) {
@@ -25,8 +26,8 @@ class RankBadge extends StatelessWidget {
 
     if (rank == null) {
       return SizedBox(
-        width: size,
-        height: size,
+        width: _size,
+        height: _size,
         child: Center(
           child: Container(
             width: 6,
@@ -41,8 +42,8 @@ class RankBadge extends StatelessWidget {
     }
 
     return Container(
-      width: size,
-      height: size,
+      width: _size,
+      height: _size,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: medal ?? palette.background,

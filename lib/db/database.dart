@@ -4,26 +4,100 @@ import 'package:sqflite/sqflite.dart';
 import '../models/models.dart';
 import '../models/scoring.dart';
 
-/// Fields for a criterion that doesn't have an id yet.
-typedef CriterionDraft = ({
-  String name,
-  CriterionScope scope,
-  CriterionType type,
-  String? emoji,
-});
+/// Criteria a new project starts with until the user edits the defaults.
+const _initialPresets = <CriterionDraft>[
+  (
+    name: '교통',
+    scope: CriterionScope.building,
+    type: CriterionType.scale,
+    emoji: '🚇',
+  ),
+  (
+    name: '주변 편의시설',
+    scope: CriterionScope.building,
+    type: CriterionType.scale,
+    emoji: '🏪',
+  ),
+  (
+    name: '건물 관리 상태',
+    scope: CriterionScope.building,
+    type: CriterionType.scale,
+    emoji: '🧹',
+  ),
+  (
+    name: '주차 가능',
+    scope: CriterionScope.building,
+    type: CriterionType.binary,
+    emoji: '🅿️',
+  ),
+  (
+    name: '엘리베이터',
+    scope: CriterionScope.building,
+    type: CriterionType.binary,
+    emoji: '🛗',
+  ),
+  (
+    name: '채광',
+    scope: CriterionScope.room,
+    type: CriterionType.scale,
+    emoji: '☀️',
+  ),
+  (
+    name: '소음',
+    scope: CriterionScope.room,
+    type: CriterionType.scale,
+    emoji: '🔊',
+  ),
+  (
+    name: '수압',
+    scope: CriterionScope.room,
+    type: CriterionType.scale,
+    emoji: '🚿',
+  ),
+  (
+    name: '곰팡이·결로',
+    scope: CriterionScope.room,
+    type: CriterionType.scale,
+    emoji: '💧',
+  ),
+  (
+    name: '방 크기',
+    scope: CriterionScope.room,
+    type: CriterionType.scale,
+    emoji: '📐',
+  ),
+  (
+    name: '가격',
+    scope: CriterionScope.room,
+    type: CriterionType.scale,
+    emoji: '💰',
+  ),
+  (
+    name: '풀옵션',
+    scope: CriterionScope.room,
+    type: CriterionType.binary,
+    emoji: '🛋️',
+  ),
+];
 
-/// In-memory copy of a deleted room, kept so the deletion can be undone.
-class RoomSnapshot {
-  final Room room;
-  final Map<int, double> scores;
-  final List<MediaItem> media;
+/// A deletion that is hidden from every read right away but only written when committed,
+/// so it can still be undone. An app killed in between simply keeps the data.
+class StagedDeletion {
+  StagedDeletion._(this._commit, this._cancel);
 
-  const RoomSnapshot({
-    required this.room,
-    required this.scores,
-    required this.media,
-  });
+  final Future<void> Function() _commit;
+  final void Function() _cancel;
+
+  Future<void> commit() => _commit();
+
+  void cancel() => _cancel();
 }
+
+/// Scores given with one criterion, kept to undo a type change that rewrote them.
+typedef CriterionScores = ({
+  Map<int, double> byBuilding,
+  Map<int, double> byRoom,
+});
 
 /// Local SQLite storage, used through this single instance.
 class AppDatabase {
@@ -35,45 +109,19 @@ class AppDatabase {
 
   Future<Database> get database async => _db ??= await _open();
 
+  /// Row ids per table that are staged for deletion and must not appear in reads.
+  final _hidden = <String, Set<int>>{};
+
   Future<Database> _open() async {
     final path = join(await getDatabasesPath(), 'borogayo.db');
     return openDatabase(
       path,
-      version: 4,
+      version: 5,
       onConfigure: (db) async {
         // Deleting a parent also deletes its rooms, scores, and media.
         await db.execute('PRAGMA foreign_keys = ON');
       },
-      onCreate: (db, version) async => _createSchema(db),
-      onUpgrade: (db, oldVersion, newVersion) async {
-        if (oldVersion < 2) {
-          // Version 2 introduced buildings and changed every table's shape.
-          // Older data can't be carried over, so the tables are recreated.
-          for (final table in const [
-            'media',
-            'room_scores',
-            'building_scores',
-            'rooms',
-            'buildings',
-            'scores',
-            'houses',
-            'criteria',
-            'projects',
-          ]) {
-            await db.execute('DROP TABLE IF EXISTS $table');
-          }
-          await _createSchema(db);
-          return;
-        }
-        // Later versions only add columns, so data is kept.
-        if (oldVersion < 3) {
-          await db.execute('ALTER TABLE media ADD COLUMN label TEXT');
-        }
-        if (oldVersion < 4) {
-          await db.execute('ALTER TABLE criteria ADD COLUMN emoji TEXT');
-          await db.execute('ALTER TABLE media ADD COLUMN thumb_path TEXT');
-        }
-      },
+      onCreate: (db, version) => _createSchema(db),
     );
   }
 
@@ -102,7 +150,6 @@ class AppDatabase {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
         name TEXT NOT NULL,
-        memo TEXT,
         created_at TEXT NOT NULL
       )
     ''');
@@ -148,7 +195,66 @@ class AppDatabase {
         CHECK ((building_id IS NULL) <> (room_id IS NULL))
       )
     ''');
+    await db.execute('''
+      CREATE TABLE preset_criteria (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        scope TEXT NOT NULL,
+        type TEXT NOT NULL,
+        weight INTEGER NOT NULL DEFAULT 3,
+        position INTEGER NOT NULL DEFAULT 0,
+        emoji TEXT
+      )
+    ''');
+    for (var i = 0; i < _initialPresets.length; i++) {
+      await db.insert('preset_criteria', _draftColumns(_initialPresets[i], i));
+    }
   }
+
+  static Map<String, Object?> _draftColumns(
+    CriterionDraft draft,
+    int position,
+  ) => {
+    'name': draft.name,
+    'scope': draft.scope.name,
+    'type': draft.type.name,
+    'weight': kDefaultWeight,
+    'position': position,
+    'emoji': draft.emoji,
+  };
+
+  // ---------- Staged deletions ----------
+
+  /// SQL condition excluding staged rows of [table], matched on [column].
+  String _visible(String table, String column) {
+    final ids = _hidden[table];
+    return ids == null || ids.isEmpty
+        ? '1 = 1'
+        : '$column NOT IN (${ids.join(',')})';
+  }
+
+  StagedDeletion _stage(
+    Map<String, Set<int>> rows,
+    Future<void> Function(Database db) write,
+  ) {
+    void release() {
+      for (final entry in rows.entries) {
+        _hidden[entry.key]?.removeAll(entry.value);
+      }
+    }
+
+    for (final entry in rows.entries) {
+      (_hidden[entry.key] ??= {}).addAll(entry.value);
+    }
+    return StagedDeletion._(() async {
+      await write(await database);
+      release();
+    }, release);
+  }
+
+  StagedDeletion _stageRow(String table, int id) => _stage({
+    table: {id},
+  }, (db) => db.delete(table, where: 'id = ?', whereArgs: [id]));
 
   // ---------- Projects ----------
 
@@ -157,43 +263,44 @@ class AppDatabase {
     final rows = await db.rawQuery('''
       SELECT
         p.id, p.name, p.created_at,
-        (SELECT COUNT(*) FROM buildings b WHERE b.project_id = p.id) AS building_count,
+        (SELECT COUNT(*) FROM buildings b
+          WHERE b.project_id = p.id AND ${_visible('buildings', 'b.id')}
+            AND EXISTS (SELECT 1 FROM rooms r
+                         WHERE r.building_id = b.id AND ${_visible('rooms', 'r.id')})
+        ) AS building_count,
         (SELECT COUNT(*) FROM rooms r
-           JOIN buildings b2 ON b2.id = r.building_id
-          WHERE b2.project_id = p.id) AS room_count
+           JOIN buildings b ON b.id = r.building_id
+          WHERE b.project_id = p.id
+            AND ${_visible('buildings', 'b.id')} AND ${_visible('rooms', 'r.id')}
+        ) AS room_count
       FROM projects p
+      WHERE ${_visible('projects', 'p.id')}
       ORDER BY p.created_at DESC
     ''');
 
-    return rows
-        .map(
-          (row) => ProjectSummary(
-            project: Project.fromMap(row),
-            buildingCount: row['building_count'] as int,
-            roomCount: row['room_count'] as int,
-          ),
-        )
-        .toList();
+    return [
+      for (final row in rows)
+        ProjectSummary(
+          project: Project.fromMap(row),
+          buildingCount: row['building_count'] as int,
+          roomCount: row['room_count'] as int,
+        ),
+    ];
   }
 
-  /// Creates a project and its criteria in one transaction; a project without criteria is useless.
-  Future<int> createProject(String name, List<CriterionDraft> criteria) async {
+  /// Creates a project with a copy of the default criteria.
+  Future<int> createProject(String name) async {
     final db = await database;
+    final presets = await readPresets();
     return db.transaction((txn) async {
       final projectId = await txn.insert('projects', {
         'name': name,
         'created_at': DateTime.now().toIso8601String(),
       });
-      for (var i = 0; i < criteria.length; i++) {
-        final draft = criteria[i];
+      for (final preset in presets) {
         await txn.insert('criteria', {
+          ...preset.toColumns(),
           'project_id': projectId,
-          'name': draft.name,
-          'scope': draft.scope.name,
-          'type': draft.type.name,
-          'weight': 3,
-          'position': i,
-          'emoji': draft.emoji,
         });
       }
       return projectId;
@@ -215,10 +322,23 @@ class AppDatabase {
     await db.delete('projects', where: 'id = ?', whereArgs: [id]);
   }
 
-  /// "Reset data" in settings. Deleting projects cascades to everything else.
-  Future<void> deleteAllProjects() async {
+  StagedDeletion stageProjectDeletion(int id) => _stageRow('projects', id);
+
+  /// "Delete all data" in settings. Deleting projects cascades to everything else.
+  Future<StagedDeletion> stageAllProjectsDeletion() async {
     final db = await database;
-    await db.delete('projects');
+    final ids = {
+      for (final row in await db.query(
+        'projects',
+        columns: ['id'],
+        where: _visible('projects', 'id'),
+      ))
+        row['id'] as int,
+    };
+    return _stage({'projects': ids}, (db) async {
+      if (ids.isEmpty) return;
+      await db.delete('projects', where: 'id IN (${ids.join(',')})');
+    });
   }
 
   // ---------- Name uniqueness ----------
@@ -247,21 +367,16 @@ class AppDatabase {
     int? exceptId,
   ) async {
     final db = await database;
-    final conditions = [
-      if (ownerColumn != null) '$ownerColumn = ?',
-      'name = ?',
-    ];
-    final args = <Object?>[if (ownerColumn != null) ownerId, name.trim()];
-    if (exceptId != null) {
-      conditions.add('id <> ?');
-      args.add(exceptId);
-    }
-
     final rows = await db.query(
       table,
       columns: ['id'],
-      where: conditions.join(' AND '),
-      whereArgs: args,
+      where: [
+        if (ownerColumn != null) '$ownerColumn = ?',
+        'name = ?',
+        if (exceptId != null) 'id <> ?',
+        _visible(table, 'id'),
+      ].join(' AND '),
+      whereArgs: [?ownerId, name.trim(), ?exceptId],
       limit: 1,
     );
     return rows.isNotEmpty;
@@ -269,62 +384,105 @@ class AppDatabase {
 
   // ---------- Criteria ----------
 
-  Future<List<Criterion>> readCriteria(
-    int projectId, {
-    CriterionScope? scope,
-  }) async {
+  Future<List<Criterion>> readCriteria(int projectId) =>
+      _readCriteria('criteria', projectId: projectId);
+
+  Future<List<Criterion>> readPresets() => _readCriteria('preset_criteria');
+
+  Future<List<Criterion>> _readCriteria(String table, {int? projectId}) async {
     final db = await database;
     final rows = await db.query(
-      'criteria',
-      where: scope == null ? 'project_id = ?' : 'project_id = ? AND scope = ?',
-      whereArgs: scope == null ? [projectId] : [projectId, scope.name],
+      table,
+      where: [
+        if (projectId != null) 'project_id = ?',
+        _visible(table, 'id'),
+      ].join(' AND '),
+      whereArgs: [?projectId],
       orderBy: 'position ASC, id ASC',
     );
     return rows.map(Criterion.fromMap).toList();
   }
 
-  Future<void> addCriterion(int projectId, CriterionDraft draft) async {
+  Future<int> addCriterion(int projectId, CriterionDraft draft) async {
     final db = await database;
-    final existing = await readCriteria(projectId);
-    await db.insert('criteria', {
+    return db.insert('criteria', {
+      ..._draftColumns(draft, await _nextPosition('criteria')),
       'project_id': projectId,
-      'name': draft.name,
-      'scope': draft.scope.name,
-      'type': draft.type.name,
-      'weight': 3,
-      'position': existing.length,
-      'emoji': draft.emoji,
     });
   }
 
-  Future<void> updateCriterion(Criterion criterion) async {
+  Future<int> addPreset(CriterionDraft draft) async {
+    final db = await database;
+    return db.insert(
+      'preset_criteria',
+      _draftColumns(draft, await _nextPosition('preset_criteria')),
+    );
+  }
+
+  Future<int> _nextPosition(String table) async {
+    final db = await database;
+    final rows = await db.rawQuery('SELECT MAX(position) AS last FROM $table');
+    return ((rows.first['last'] as int?) ?? -1) + 1;
+  }
+
+  Future<void> updateCriterion(Criterion criterion) =>
+      _updateCriterion('criteria', criterion);
+
+  Future<void> updatePreset(Criterion criterion) =>
+      _updateCriterion('preset_criteria', criterion);
+
+  Future<void> _updateCriterion(String table, Criterion criterion) async {
     final db = await database;
     await db.update(
-      'criteria',
-      criterion.toMap(),
+      table,
+      criterion.toColumns(),
       where: 'id = ?',
       whereArgs: [criterion.id],
     );
   }
 
-  /// Whether any score uses this criterion; decides whether to warn before changing its type.
-  Future<bool> hasScoresFor(int criterionId) async {
+  StagedDeletion stageCriterionDeletion(int id) => _stageRow('criteria', id);
+
+  StagedDeletion stagePresetDeletion(int id) =>
+      _stageRow('preset_criteria', id);
+
+  Future<CriterionScores> readScoresOf(int criterionId) async {
     final db = await database;
-    for (final table in const ['building_scores', 'room_scores']) {
-      final rows = await db.query(
+    Future<Map<int, double>> read(String table, String owner) async => {
+      for (final row in await db.query(
         table,
-        columns: ['id'],
         where: 'criterion_id = ?',
         whereArgs: [criterionId],
-        limit: 1,
-      );
-      if (rows.isNotEmpty) return true;
-    }
-    return false;
+      ))
+        row[owner] as int: (row['value'] as num).toDouble(),
+    };
+    return (
+      byBuilding: await read('building_scores', 'building_id'),
+      byRoom: await read('room_scores', 'room_id'),
+    );
   }
 
-  /// Rounds existing scores to 0 or 10 when a scale criterion becomes binary.
-  /// A leftover 7.5 would be neither yes nor no, which the UI can't display.
+  Future<void> restoreScoresOf(int criterionId, CriterionScores scores) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      for (final (table, owner, values) in [
+        ('building_scores', 'building_id', scores.byBuilding),
+        ('room_scores', 'room_id', scores.byRoom),
+      ]) {
+        for (final entry in values.entries) {
+          await txn.update(
+            table,
+            {'value': entry.value},
+            where: '$owner = ? AND criterion_id = ?',
+            whereArgs: [entry.key, criterionId],
+          );
+        }
+      }
+    });
+  }
+
+  /// Rounds existing scores to 0 or 10 when a scale criterion becomes yes/no.
+  /// A leftover 7.5 would be neither answer, which the UI can't display.
   Future<void> snapScoresToBinary(int criterionId) async {
     final db = await database;
     for (final table in const ['building_scores', 'room_scores']) {
@@ -336,185 +494,203 @@ class AppDatabase {
     }
   }
 
-  Future<void> deleteCriterion(int id) async {
-    final db = await database;
-    await db.delete('criteria', where: 'id = ?', whereArgs: [id]);
-  }
-
   // ---------- Buildings ----------
 
-  Future<int> createBuilding(int projectId, String name, String? memo) async {
+  Future<Building> readBuilding(int id) async {
     final db = await database;
-    return db.insert('buildings', {
-      'project_id': projectId,
-      'name': name,
-      'memo': memo,
-      'created_at': DateTime.now().toIso8601String(),
-    });
+    final rows = await db.query('buildings', where: 'id = ?', whereArgs: [id]);
+    return Building.fromMap(rows.single);
   }
 
-  Future<void> updateBuilding(int id, String name, String? memo) async {
+  /// Buildings that still have rooms, newest room's building first,
+  /// so the building added to last is the natural default.
+  Future<List<Building>> readBuildings(int projectId) async {
+    final db = await database;
+    final rows = await db.rawQuery(
+      '''
+      SELECT b.id, b.name, MAX(r.created_at) AS last_room
+      FROM buildings b
+      JOIN rooms r ON r.building_id = b.id
+      WHERE b.project_id = ? AND ${_visible('buildings', 'b.id')} AND ${_visible('rooms', 'r.id')}
+      GROUP BY b.id
+      ORDER BY last_room DESC
+    ''',
+      [projectId],
+    );
+    return rows.map(Building.fromMap).toList();
+  }
+
+  Future<void> renameBuilding(int id, String name) async {
     final db = await database;
     await db.update(
       'buildings',
-      {'name': name, 'memo': memo},
+      {'name': name},
       where: 'id = ?',
       whereArgs: [id],
     );
   }
 
-  Future<void> deleteBuilding(int id) async {
-    final db = await database;
-    await db.delete('buildings', where: 'id = ?', whereArgs: [id]);
-  }
-
   // ---------- Rooms ----------
+
+  Future<Room> readRoom(int id) async {
+    final db = await database;
+    final rows = await db.query('rooms', where: 'id = ?', whereArgs: [id]);
+    return Room.fromMap(rows.single);
+  }
 
   Future<List<Room>> readRooms(int buildingId) async {
     final db = await database;
     final rows = await db.query(
       'rooms',
-      where: 'building_id = ?',
+      where: 'building_id = ? AND ${_visible('rooms', 'id')}',
       whereArgs: [buildingId],
       orderBy: 'created_at ASC',
     );
     return rows.map(Room.fromMap).toList();
   }
 
-  Future<int> createRoom(int buildingId, String name, String? memo) async {
+  /// Adds a room, creating its building first when [buildingId] is null.
+  Future<({int buildingId, int roomId})> createRoom({
+    required int projectId,
+    int? buildingId,
+    String? newBuildingName,
+    required String name,
+  }) async {
     final db = await database;
-    return db.insert('rooms', {
-      'building_id': buildingId,
-      'name': name,
-      'memo': memo,
-      'created_at': DateTime.now().toIso8601String(),
-    });
-  }
-
-  Future<void> updateRoom(int id, String name, String? memo) async {
-    final db = await database;
-    await db.update(
-      'rooms',
-      {'name': name, 'memo': memo},
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-  }
-
-  /// Deletes a room and returns a snapshot with its scores and media for undo.
-  Future<RoomSnapshot?> deleteRoom(int id) async {
-    final db = await database;
-    final rows = await db.query('rooms', where: 'id = ?', whereArgs: [id]);
-    if (rows.isEmpty) return null;
-
-    final snapshot = RoomSnapshot(
-      room: Room.fromMap(rows.first),
-      scores: await readRoomScores(id),
-      media: await readMedia(roomId: id),
-    );
-    await db.delete('rooms', where: 'id = ?', whereArgs: [id]);
-    return snapshot;
-  }
-
-  /// Undoes a deletion. The room gets a new id but looks the same to the user.
-  Future<void> restoreRoom(RoomSnapshot snapshot) async {
-    final db = await database;
-    // Criteria may have been deleted in the meantime; restore only scores for existing ones.
-    final aliveIds = (await db.query(
-      'criteria',
-      columns: ['id'],
-    )).map((row) => row['id'] as int).toSet();
-
-    await db.transaction((txn) async {
-      final roomId = await txn.insert('rooms', {
-        'building_id': snapshot.room.buildingId,
-        'name': snapshot.room.name,
-        'memo': snapshot.room.memo,
-        'created_at': snapshot.room.createdAt.toIso8601String(),
+    return db.transaction((txn) async {
+      final now = DateTime.now().toIso8601String();
+      final building =
+          buildingId ??
+          await txn.insert('buildings', {
+            'project_id': projectId,
+            'name': newBuildingName,
+            'created_at': now,
+          });
+      final room = await txn.insert('rooms', {
+        'building_id': building,
+        'name': name,
+        'created_at': now,
       });
-      for (final entry in snapshot.scores.entries) {
-        if (!aliveIds.contains(entry.key)) continue;
-        await txn.insert('room_scores', {
-          'room_id': roomId,
-          'criterion_id': entry.key,
-          'value': entry.value,
-        });
-      }
-      for (final item in snapshot.media) {
-        await txn.insert('media', {
-          'room_id': roomId,
-          'path': item.path,
-          'kind': item.kind.name,
-          'label': item.label,
-          'thumb_path': item.thumbPath,
-          'created_at': item.createdAt.toIso8601String(),
-        });
-      }
+      return (buildingId: building, roomId: room);
     });
+  }
+
+  Future<void> renameRoom(int id, String name) async {
+    final db = await database;
+    await db.update('rooms', {'name': name}, where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<void> updateRoomMemo(int id, String? memo) async {
+    final db = await database;
+    await db.update('rooms', {'memo': memo}, where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Deletes a room right away, and its building if that was the building's last room.
+  Future<void> deleteRoom(int id) async {
+    final db = await database;
+    final room = await readRoom(id);
+    final others = await db.query(
+      'rooms',
+      columns: ['id'],
+      where: 'building_id = ? AND id <> ?',
+      whereArgs: [room.buildingId, id],
+      limit: 1,
+    );
+    if (others.isEmpty) {
+      await db.delete(
+        'buildings',
+        where: 'id = ?',
+        whereArgs: [room.buildingId],
+      );
+    } else {
+      await db.delete('rooms', where: 'id = ?', whereArgs: [id]);
+    }
+  }
+
+  /// Stages a room deletion. A building exists only for its rooms, so deleting its last
+  /// visible room stages the building too.
+  Future<StagedDeletion> stageRoomDeletion(int id) async {
+    final room = await readRoom(id);
+    final remaining = await readRooms(room.buildingId);
+    final lastRoom = remaining.every((other) => other.id == id);
+
+    return lastRoom
+        ? _stage(
+            {
+              'rooms': {id},
+              'buildings': {room.buildingId},
+            },
+            (db) => db.delete(
+              'buildings',
+              where: 'id = ?',
+              whereArgs: [room.buildingId],
+            ),
+          )
+        : _stageRow('rooms', id);
   }
 
   // ---------- Scores ----------
 
-  Future<Map<int, double>> readBuildingScores(int buildingId) async {
-    final db = await database;
-    final rows = await db.query(
-      'building_scores',
-      where: 'building_id = ?',
-      whereArgs: [buildingId],
-    );
-    return {
-      for (final row in rows)
-        row['criterion_id'] as int: (row['value'] as num).toDouble(),
-    };
-  }
+  Future<Map<int, double>> readBuildingScores(int buildingId) =>
+      _readScores('building_scores', 'building_id', buildingId);
 
-  Future<Map<int, double>> readRoomScores(int roomId) async {
-    final db = await database;
-    final rows = await db.query(
-      'room_scores',
-      where: 'room_id = ?',
-      whereArgs: [roomId],
-    );
-    return {
-      for (final row in rows)
-        row['criterion_id'] as int: (row['value'] as num).toDouble(),
-    };
-  }
+  Future<Map<int, double>> readRoomScores(int roomId) =>
+      _readScores('room_scores', 'room_id', roomId);
 
-  Future<void> saveBuildingScores(int buildingId, Map<int, double> values) =>
-      _saveScores('building_scores', 'building_id', buildingId, values);
-
-  Future<void> saveRoomScores(int roomId, Map<int, double> values) =>
-      _saveScores('room_scores', 'room_id', roomId, values);
-
-  Future<void> _saveScores(
+  Future<Map<int, double>> _readScores(
     String table,
-    String ownerColumn,
+    String owner,
     int ownerId,
-    Map<int, double> values,
   ) async {
     final db = await database;
-    await db.transaction((txn) async {
-      // Removed scores must lose their rows to count as unscored again;
-      // otherwise they'd vanish from the screen but still affect the ranking.
-      // The keys are integers from the database, so joining them is safe.
-      final keep = values.keys.join(',');
-      await txn.delete(
-        table,
-        where: values.isEmpty
-            ? '$ownerColumn = ?'
-            : '$ownerColumn = ? AND criterion_id NOT IN ($keep)',
-        whereArgs: [ownerId],
-      );
+    final rows = await db.query(
+      table,
+      where: '$owner = ?',
+      whereArgs: [ownerId],
+    );
+    return {
+      for (final row in rows)
+        row['criterion_id'] as int: (row['value'] as num).toDouble(),
+    };
+  }
 
-      for (final entry in values.entries) {
-        await txn.insert(table, {
-          ownerColumn: ownerId,
-          'criterion_id': entry.key,
-          'value': entry.value,
-        }, conflictAlgorithm: ConflictAlgorithm.replace);
-      }
-    });
+  /// Writes one score; null removes it so the criterion counts as unscored again.
+  Future<void> setBuildingScore(
+    int buildingId,
+    int criterionId,
+    double? value,
+  ) => _setScore(
+    'building_scores',
+    'building_id',
+    buildingId,
+    criterionId,
+    value,
+  );
+
+  Future<void> setRoomScore(int roomId, int criterionId, double? value) =>
+      _setScore('room_scores', 'room_id', roomId, criterionId, value);
+
+  Future<void> _setScore(
+    String table,
+    String owner,
+    int ownerId,
+    int criterionId,
+    double? value,
+  ) async {
+    final db = await database;
+    if (value == null) {
+      await db.delete(
+        table,
+        where: '$owner = ? AND criterion_id = ?',
+        whereArgs: [ownerId, criterionId],
+      );
+    } else {
+      await db.insert(table, {
+        owner: ownerId,
+        'criterion_id': criterionId,
+        'value': value,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
   }
 
   // ---------- Photos and videos ----------
@@ -523,23 +699,24 @@ class AppDatabase {
     final db = await database;
     final rows = await db.query(
       'media',
-      where: buildingId != null ? 'building_id = ?' : 'room_id = ?',
+      where:
+          '${buildingId != null ? 'building_id' : 'room_id'} = ? AND ${_visible('media', 'id')}',
       whereArgs: [buildingId ?? roomId],
       orderBy: 'created_at ASC',
     );
     return rows.map(MediaItem.fromMap).toList();
   }
 
-  Future<void> addMedia({
+  Future<int> addMedia({
     int? buildingId,
     int? roomId,
     required String path,
     required MediaKind kind,
-    String? label,
+    required String label,
     String? thumbPath,
   }) async {
     final db = await database;
-    await db.insert('media', {
+    return db.insert('media', {
       'building_id': buildingId,
       'room_id': roomId,
       'path': path,
@@ -550,15 +727,14 @@ class AppDatabase {
     });
   }
 
-  /// Moves media between a building and a room.
+  /// Moves media between a building and a room and sets its area.
   ///
   /// Exactly one owner column may be set (CHECK constraint), so the other is cleared.
-  /// Buildings and rooms use different area names, so a new label is passed in.
-  Future<void> moveMedia(
+  Future<void> placeMedia(
     int id, {
     int? buildingId,
     int? roomId,
-    required String label,
+    required String? label,
   }) async {
     assert(
       (buildingId == null) != (roomId == null),
@@ -578,6 +754,8 @@ class AppDatabase {
     await db.delete('media', where: 'id = ?', whereArgs: [id]);
   }
 
+  StagedDeletion stageMediaDeletion(int id) => _stageRow('media', id);
+
   /// Every file path still referenced by the database, for storage cleanup.
   Future<Set<String>> readAllMediaPaths() async {
     final db = await database;
@@ -594,162 +772,80 @@ class AppDatabase {
 
   /// Every room in the project, ranked in one list regardless of building.
   ///
-  /// Rooms are what get chosen, so rooms are ranked. Buildings only hold ratings their
-  /// rooms share and have no score of their own.
-  ///
-  /// - A room's score combines its building's ratings with its own.
-  /// - Until everything is scored there is no score, and the room sorts as 0.
-  ///   Ties go to rooms with a score, then building and room name.
+  /// A room's score combines its building's ratings with its own. Until everything is
+  /// scored there is no score and the room sorts as 0. Ties go to rooms with a score,
+  /// then building and room name, so the order never shifts between views.
   Future<List<RoomScore>> readRoomBoard(int projectId) async {
     final db = await database;
 
     final criteria = await readCriteria(projectId);
-    final byId = {for (final criterion in criteria) criterion.id!: criterion};
-    final roomCriterionCount = criteria
-        .where((criterion) => criterion.scope == CriterionScope.room)
-        .length;
-    final buildingCriterionCount = criteria.length - roomCriterionCount;
-
-    final buildingRows = await db.query(
-      'buildings',
-      where: 'project_id = ?',
-      whereArgs: [projectId],
-    );
-    if (buildingRows.isEmpty) return [];
-    final buildings = {
-      for (final row in buildingRows) row['id'] as int: Building.fromMap(row),
-    };
+    final byId = {for (final criterion in criteria) criterion.id: criterion};
 
     final roomRows = await db.rawQuery(
       '''
-      SELECT r.* FROM rooms r
+      SELECT r.*, b.name AS building_name
+      FROM rooms r
       JOIN buildings b ON b.id = r.building_id
-      WHERE b.project_id = ?
+      WHERE b.project_id = ? AND ${_visible('buildings', 'b.id')} AND ${_visible('rooms', 'r.id')}
     ''',
       [projectId],
     );
     if (roomRows.isEmpty) return [];
 
-    final buildingScoreRows = await db.rawQuery(
-      '''
-      SELECT s.building_id, s.criterion_id, s.value FROM building_scores s
-      JOIN buildings b ON b.id = s.building_id
-      WHERE b.project_id = ?
-    ''',
-      [projectId],
-    );
-
-    final roomScoreRows = await db.rawQuery(
-      '''
-      SELECT s.room_id, s.criterion_id, s.value FROM room_scores s
-      JOIN rooms r ON r.id = s.room_id
-      JOIN buildings b ON b.id = r.building_id
-      WHERE b.project_id = ?
-    ''',
-      [projectId],
-    );
-
-    Map<int, Map<int, double>> group(
-      List<Map<String, Object?>> rows,
-      String ownerColumn,
-    ) {
+    Future<Map<int, Map<int, double>>> scoresBy(
+      String sql,
+      String owner,
+    ) async {
       final result = <int, Map<int, double>>{};
-      for (final row in rows) {
-        result.putIfAbsent(
-          row[ownerColumn] as int,
-          () => {},
-        )[row['criterion_id'] as int] = (row['value'] as num)
-            .toDouble();
+      for (final row in await db.rawQuery(sql, [projectId])) {
+        (result[row[owner] as int] ??= {})[row['criterion_id'] as int] =
+            (row['value'] as num).toDouble();
       }
       return result;
     }
 
-    final byBuilding = group(buildingScoreRows, 'building_id');
-    final byRoom = group(roomScoreRows, 'room_id');
+    final byBuilding = await scoresBy('''
+      SELECT s.building_id, s.criterion_id, s.value FROM building_scores s
+      JOIN buildings b ON b.id = s.building_id
+      WHERE b.project_id = ?
+    ''', 'building_id');
+    final byRoom = await scoresBy('''
+      SELECT s.room_id, s.criterion_id, s.value FROM room_scores s
+      JOIN rooms r ON r.id = s.room_id
+      JOIN buildings b ON b.id = r.building_id
+      WHERE b.project_id = ?
+    ''', 'room_id');
 
     final board = <RoomScore>[];
     for (final row in roomRows) {
       final room = Room.fromMap(row);
-      final building = buildings[room.buildingId];
-      if (building == null) continue;
-
-      final buildingScores = byBuilding[building.id] ?? const <int, double>{};
-      final roomScores = byRoom[room.id] ?? const <int, double>{};
       final result = computeScore(
-        scores: {...buildingScores, ...roomScores},
+        scores: {...?byBuilding[room.buildingId], ...?byRoom[room.id]},
         criteriaById: byId,
       );
-
       board.add(
         RoomScore(
           room: room,
-          building: building,
+          building: Building(
+            id: room.buildingId,
+            name: row['building_name'] as String,
+          ),
           percent: result.percent,
-          // The progress bar counts room criteria only; building progress is shown on the building screen.
-          scoredCount: roomScores.length,
-          criterionCount: roomCriterionCount,
-          blockedByBuilding:
-              (roomCriterionCount == 0 ||
-                  roomScores.length >= roomCriterionCount) &&
-              buildingCriterionCount > 0 &&
-              buildingScores.length < buildingCriterionCount,
+          scoredCount: result.scoredCount,
+          criterionCount: result.criterionCount,
         ),
       );
     }
 
-    board.sort(
-      _byScore(
-        (entry) => entry.percent,
-        (entry) => '${entry.building.name} ${entry.room.name}',
-      ),
-    );
-    return board;
-  }
-
-  /// For the building list: progress only, since buildings have no score, sorted by name.
-  Future<List<BuildingSummary>> readBuildingSummaries(int projectId) async {
-    final db = await database;
-    final rows = await db.rawQuery(
-      '''
-      SELECT
-        b.id, b.project_id, b.name, b.memo, b.created_at,
-        (SELECT COUNT(*) FROM rooms r WHERE r.building_id = b.id) AS room_count,
-        (SELECT COUNT(*) FROM building_scores s WHERE s.building_id = b.id) AS scored_count,
-        (SELECT COUNT(*) FROM criteria c
-          WHERE c.project_id = b.project_id AND c.scope = 'building') AS criterion_count
-      FROM buildings b
-      WHERE b.project_id = ?
-      ORDER BY b.name ASC
-    ''',
-      [projectId],
-    );
-
-    return rows
-        .map(
-          (row) => BuildingSummary(
-            building: Building.fromMap(row),
-            roomCount: row['room_count'] as int,
-            buildingScoredCount: row['scored_count'] as int,
-            buildingCriterionCount: row['criterion_count'] as int,
-          ),
-        )
-        .toList();
-  }
-
-  /// Descending score, with unfinished entries as 0 at the bottom.
-  /// Ties go to entries with a score, then by name, so the order never shifts between views.
-  static int Function(T, T) _byScore<T>(
-    double? Function(T) score,
-    String Function(T) name,
-  ) {
-    return (a, b) {
-      final byScore = (score(b) ?? 0).compareTo(score(a) ?? 0);
+    board.sort((a, b) {
+      final byScore = (b.percent ?? 0).compareTo(a.percent ?? 0);
       if (byScore != 0) return byScore;
-
-      final byHasScore = (score(b) != null ? 1 : 0).compareTo(
-        score(a) != null ? 1 : 0,
+      final byHasScore = (b.hasScore ? 1 : 0).compareTo(a.hasScore ? 1 : 0);
+      if (byHasScore != 0) return byHasScore;
+      return '${a.building.name} ${a.room.name}'.compareTo(
+        '${b.building.name} ${b.room.name}',
       );
-      return byHasScore != 0 ? byHasScore : name(a).compareTo(name(b));
-    };
+    });
+    return board;
   }
 }

@@ -9,18 +9,17 @@ Criterion criterion(
   CriterionType type = CriterionType.scale,
 }) => Criterion(
   id: id,
-  projectId: 1,
   name: '기준$id',
   scope: CriterionScope.room,
   type: type,
   weight: weight,
+  position: id,
 );
 
 void main() {
   test('no score when nothing is rated', () {
     final result = computeScore(scores: {}, criteriaById: {1: criterion(1)});
 
-    expect(result.hasScore, isFalse);
     expect(result.percent, isNull);
     expect(result.scoredCount, 0);
   });
@@ -34,22 +33,9 @@ void main() {
     );
 
     // The scored criteria alone give 100, but the third wasn't rated, so there's no score yet.
-    expect(partial.hasScore, isFalse);
+    expect(partial.percent, isNull);
     expect(partial.scoredCount, 2);
     expect(partial.criterionCount, 3);
-  });
-
-  test('unscored results rank as 0', () {
-    final criteriaById = {1: criterion(1), 2: criterion(2)};
-
-    final partial = computeScore(scores: {1: 10}, criteriaById: criteriaById);
-    final complete = computeScore(
-      scores: {1: 2, 2: 2},
-      criteriaById: criteriaById,
-    );
-
-    expect(partial.rankValue, 0);
-    expect(complete.rankValue, greaterThan(partial.rankValue));
   });
 
   test('full marks everywhere is 100', () {
@@ -68,7 +54,6 @@ void main() {
       2: criterion(2, weight: 1),
     };
 
-    // Full marks on the important criterion should rank higher.
     final important = computeScore(
       scores: {1: 10, 2: 0},
       criteriaById: criteriaById,
@@ -78,7 +63,6 @@ void main() {
       criteriaById: criteriaById,
     );
 
-    expect(important.rankValue, greaterThan(trivial.rankValue));
     // Weights 5:1, so 10 * 5 / (10 * 6) = 83.3%
     expect(important.percent, closeTo(83.3, 0.1));
     expect(trivial.percent, closeTo(16.7, 0.1));
@@ -93,7 +77,7 @@ void main() {
       },
     );
 
-    // "No" is still a rating, unlike an untouched criterion, so a score comes out.
+    // "No" is still an answer, unlike an untouched criterion, so a score comes out.
     expect(result.percent, 50);
   });
 
@@ -110,7 +94,6 @@ void main() {
   test('no score without criteria', () {
     final result = computeScore(scores: {}, criteriaById: {});
 
-    expect(result.hasScore, isFalse);
-    expect(result.rankValue, 0);
+    expect(result.percent, isNull);
   });
 }

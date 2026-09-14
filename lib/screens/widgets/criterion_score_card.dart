@@ -4,32 +4,45 @@ import 'package:flutter/services.dart';
 import '../../models/models.dart';
 import '../../theme.dart';
 
-String formatScore(double value) => value == value.roundToDouble()
+String _formatScore(double value) => value == value.roundToDouble()
     ? value.toInt().toString()
     : value.toStringAsFixed(1);
 
-/// Card for scoring one criterion, shared by building and room scoring.
-class CriterionScoreCard extends StatelessWidget {
+/// Card for scoring one criterion. Every committed change is saved by the caller right away.
+class CriterionScoreCard extends StatefulWidget {
   const CriterionScoreCard({
     super.key,
     required this.criterion,
     required this.value,
     required this.onChanged,
-    required this.onCleared,
   });
 
   final Criterion criterion;
 
-  /// Null while unscored, shown as a dimmed `0` so untouched criteria stand out.
+  /// Null while unscored.
   final double? value;
-  final ValueChanged<double> onChanged;
 
-  /// Resets an accidental value to unscored.
-  final VoidCallback onCleared;
+  /// Called with the new value when a change is finished, or null to clear it.
+  final ValueChanged<double?> onChanged;
+
+  @override
+  State<CriterionScoreCard> createState() => _CriterionScoreCardState();
+}
+
+class _CriterionScoreCardState extends State<CriterionScoreCard> {
+  /// Slider position while dragging; only the final value is committed.
+  double? _dragging;
+
+  void _commit(double? value) {
+    HapticFeedback.selectionClick();
+    widget.onChanged(value);
+  }
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final criterion = widget.criterion;
+    final value = widget.value;
 
     return AppCard(
       child: Column(
@@ -52,16 +65,13 @@ class CriterionScoreCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              _Pill(text: '중요도 ${criterion.weight}', color: palette.brand),
+              _WeightPill(criterion.weight),
               const Spacer(),
-              // Only once scored. A slider takes a value on the lightest touch, and without
-              // a way back a single slip would keep the room's score blocked.
+              // A slider takes a value on the lightest touch, so a scored criterion can
+              // always go back to unscored.
               if (value != null)
                 GestureDetector(
-                  onTap: () {
-                    HapticFeedback.selectionClick();
-                    onCleared();
-                  },
+                  onTap: () => _commit(null),
                   behavior: HitTestBehavior.opaque,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
@@ -82,33 +92,20 @@ class CriterionScoreCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           if (criterion.type == CriterionType.binary)
-            _BinaryInput(value: value, onChanged: onChanged)
+            _binaryInput(palette, value)
           else
-            _ScaleInput(value: value, onChanged: onChanged),
+            _scaleInput(palette, value),
         ],
       ),
     );
   }
-}
 
-class _BinaryInput extends StatelessWidget {
-  const _BinaryInput({required this.value, required this.onChanged});
-
-  final double? value;
-  final ValueChanged<double> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-
+  Widget _binaryInput(AppPalette palette, double? value) {
     Widget option(String label, double optionValue) {
       final selected = value == optionValue;
       return Expanded(
         child: GestureDetector(
-          onTap: () {
-            HapticFeedback.selectionClick();
-            onChanged(optionValue);
-          },
+          onTap: () => _commit(optionValue),
           child: Container(
             height: 44,
             margin: const EdgeInsets.only(right: 8),
@@ -133,51 +130,45 @@ class _BinaryInput extends StatelessWidget {
       );
     }
 
-    return Row(children: [option('없음', 0), option('있음', kMaxScore)]);
+    return Row(children: [option('아니오', 0), option('예', kMaxScore)]);
   }
-}
 
-class _ScaleInput extends StatelessWidget {
-  const _ScaleInput({required this.value, required this.onChanged});
-
-  final double? value;
-  final ValueChanged<double> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    final scored = value != null;
+  Widget _scaleInput(AppPalette palette, double? value) {
+    final shown = _dragging ?? value ?? 0;
+    final scored = _dragging != null || value != null;
 
     return Row(
       children: [
         Expanded(
           child: SliderTheme(
             data: SliderTheme.of(context).copyWith(
-              activeTrackColor: palette.brand,
+              activeTrackColor: scored ? palette.brand : palette.border,
               inactiveTrackColor: palette.border,
-              thumbColor: palette.brand,
+              thumbColor: scored ? palette.brand : palette.textMuted,
               overlayColor: palette.brand.withValues(alpha: 0.12),
               trackHeight: 4,
             ),
             child: Slider(
-              value: value ?? 0,
-              min: 0,
+              value: shown,
               max: kMaxScore,
               // 0.5 steps: fine enough, still quick to set on site.
               divisions: (kMaxScore * 2).toInt(),
-              label: formatScore(value ?? 0),
               onChanged: (next) {
                 HapticFeedback.selectionClick();
-                onChanged(next);
+                setState(() => _dragging = next);
+              },
+              // Also fires for a tap that doesn't move the thumb, so tapping at 0 scores 0.
+              onChangeEnd: (end) {
+                setState(() => _dragging = null);
+                widget.onChanged(end);
               },
             ),
           ),
         ),
-        // The number appears only here; repeating it above would split attention.
         SizedBox(
           width: 32,
           child: Text(
-            formatScore(value ?? 0),
+            _formatScore(shown),
             textAlign: TextAlign.right,
             style: TextStyle(
               fontSize: 15,
@@ -191,14 +182,14 @@ class _ScaleInput extends StatelessWidget {
   }
 }
 
-class _Pill extends StatelessWidget {
-  const _Pill({required this.text, required this.color});
+class _WeightPill extends StatelessWidget {
+  const _WeightPill(this.weight);
 
-  final String text;
-  final Color color;
+  final int weight;
 
   @override
   Widget build(BuildContext context) {
+    final color = context.palette.brand;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(
@@ -206,7 +197,7 @@ class _Pill extends StatelessWidget {
         borderRadius: BorderRadius.circular(99),
       ),
       child: Text(
-        text,
+        '중요도 $weight',
         style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w600,
