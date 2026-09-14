@@ -18,7 +18,6 @@ class AreaPickerController {
 
   final List<String> labels;
   final customController = TextEditingController();
-
   String? selected;
   bool custom;
 
@@ -27,7 +26,7 @@ class AreaPickerController {
   void dispose() => customController.dispose();
 }
 
-/// Area chips plus custom input, used both when adding media and when moving it.
+/// Area choices plus custom input, used both when adding media and when moving it.
 class AreaPicker extends StatelessWidget {
   const AreaPicker({
     super.key,
@@ -50,7 +49,7 @@ class AreaPicker extends StatelessWidget {
           runSpacing: 8,
           children: [
             for (final option in controller.labels)
-              AreaChoiceChip(
+              PillChoice(
                 label: option,
                 selected: !controller.custom && controller.selected == option,
                 onTap: () {
@@ -61,9 +60,10 @@ class AreaPicker extends StatelessWidget {
                   onChanged();
                 },
               ),
-            AreaChoiceChip(
+            PillChoice(
               label: '직접 입력',
               icon: Icons.edit_outlined,
+              creates: true,
               selected: controller.custom,
               onTap: () {
                 HapticFeedback.selectionClick();
@@ -79,65 +79,11 @@ class AreaPicker extends StatelessWidget {
             controller: controller.customController,
             autofocus: true,
             textInputAction: TextInputAction.done,
-            decoration: const InputDecoration(hintText: '예: 옥상, 창고, 계단'),
+            decoration: const InputDecoration(hintText: '옥상'),
             onChanged: (_) => onChanged(),
           ),
         ],
       ],
-    );
-  }
-}
-
-/// Pill-shaped choice chip used inside sheets.
-class AreaChoiceChip extends StatelessWidget {
-  const AreaChoiceChip({
-    super.key,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-    this.icon,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  final IconData? icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-        decoration: BoxDecoration(
-          color: selected ? palette.brand : palette.background,
-          borderRadius: BorderRadius.circular(99),
-          border: Border.all(color: selected ? palette.brand : palette.border),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (icon != null) ...[
-              Icon(
-                icon,
-                size: 14,
-                color: selected ? Colors.white : palette.textMuted,
-              ),
-              const SizedBox(width: 4),
-            ],
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13.5,
-                fontWeight: FontWeight.w600,
-                color: selected ? Colors.white : palette.textMuted,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

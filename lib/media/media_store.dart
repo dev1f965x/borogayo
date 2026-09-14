@@ -52,17 +52,17 @@ class MediaStore {
     }
   }
 
-  static Future<void> delete(String path) async {
-    final file = File(path);
-    if (await file.exists()) {
-      await file.delete();
+  /// Deletes a media file and its video thumbnail, if any.
+  static Future<void> deleteFiles(String path, String? thumbPath) async {
+    for (final file in [File(path), if (thumbPath != null) File(thumbPath)]) {
+      if (await file.exists()) await file.delete();
     }
   }
 
   /// Deletes files the database no longer references.
   ///
-  /// Deleting a room can be undone, so its files aren't removed right away. Files from
-  /// deletions that were never undone are reclaimed here on app start.
+  /// Deleting a room, building, or project removes only rows, so their files are
+  /// reclaimed here on app start.
   static Future<void> cleanupOrphans(Set<String> knownPaths) async {
     try {
       final dir = await _mediaDir();

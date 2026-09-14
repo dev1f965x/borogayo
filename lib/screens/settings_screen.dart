@@ -6,7 +6,8 @@ import '../db/database.dart';
 import '../media/media_store.dart';
 import '../settings/theme_controller.dart';
 import '../theme.dart';
-import 'widgets/confirm_dialog.dart';
+import 'criteria_screen.dart';
+import 'widgets/toast.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -30,21 +31,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _version = '${info.version} (${info.buildNumber})');
   }
 
-  Future<void> _confirmReset() async {
-    final ok = await confirmDestructive(
-      context,
-      title: '모든 데이터 삭제',
-      message: '만들어둔 목록과 건물·방, 매긴 점수와 사진·영상이 전부 지워집니다. 되돌릴 수 없어요.',
+  void _openDefaultCriteria() {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) =>
+            const CriteriaScreen(title: '기본 평가 기준', store: DefaultCriteria()),
+      ),
     );
-    if (!ok || !mounted) return;
+  }
 
-    await AppDatabase.instance.deleteAllProjects();
-    // Clearing the database leaves photo files behind; nothing references them now, so reclaim them.
-    await MediaStore.cleanupOrphans(const {});
+  /// Wiping everything is the one change that still asks first, then offers undo as well.
+  Future<void> _deleteAll() async {
+    final palette = context.palette;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('모든 데이터를 삭제할까요?'),
+        content: const Text('목록, 방, 사진이 모두 지워져요'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: palette.danger,
+              minimumSize: const Size(88, 44),
+            ),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final db = AppDatabase.instance;
+    final deletion = await db.stageAllProjectsDeletion();
     if (!mounted) return;
     HapticFeedback.mediumImpact();
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('데이터를 모두 지웠어요.')));
+    showDeletionUndo(
+      '모든 데이터를 삭제했어요',
+      deletion,
+      afterCommit: () async =>
+          MediaStore.cleanupOrphans(await db.readAllMediaPaths()),
+    );
   }
 
   @override
@@ -61,7 +92,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           32,
         ),
         children: [
-          _SectionLabel('화면'),
+          const _SectionLabel('화면'),
           const SizedBox(height: 10),
           AppCard(
             child: Column(
@@ -75,7 +106,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           const SizedBox(height: 28),
-          _SectionLabel('정보'),
+          const _SectionLabel('평가 기준'),
+          const SizedBox(height: 10),
+          AppCard(
+            onTap: _openDefaultCriteria,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '기본 평가 기준',
+                    style: TextStyle(fontSize: 15, color: palette.textBody),
+                  ),
+                ),
+                Icon(Icons.chevron_right, color: palette.textMuted),
+              ],
+            ),
+          ),
+          const SizedBox(height: 28),
+          const _SectionLabel('정보'),
           const SizedBox(height: 10),
           AppCard(
             child: Row(
@@ -93,35 +141,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           const SizedBox(height: 28),
-          _SectionLabel('데이터'),
+          const _SectionLabel('데이터'),
           const SizedBox(height: 10),
           AppCard(
-            onTap: _confirmReset,
+            onTap: _deleteAll,
             child: Row(
               children: [
                 Icon(Icons.delete_outline, size: 20, color: palette.danger),
                 const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '모든 데이터 삭제',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: palette.danger,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '기기에만 저장되므로 백업본은 없습니다.',
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          color: palette.textMuted,
-                        ),
-                      ),
-                    ],
+                Text(
+                  '모든 데이터 삭제',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: palette.danger,
                   ),
                 ),
               ],

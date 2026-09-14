@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../db/database.dart';
 import '../models/models.dart';
+import '../text/josa.dart';
 import '../theme.dart';
-import 'project_detail_screen.dart';
-import 'project_form_screen.dart';
+import 'project_screen.dart';
 import 'settings_screen.dart';
-import 'widgets/confirm_dialog.dart';
 import 'widgets/delete_action.dart';
-import 'widgets/entry_dialog.dart';
+import 'widgets/name_dialog.dart';
+import 'widgets/toast.dart';
 
 /// Home screen listing house-hunting projects.
 class ProjectListScreen extends StatefulWidget {
@@ -37,32 +38,45 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
     });
   }
 
-  /// Asks for the name in a dialog, then sets up criteria on the next screen.
-  /// A single name field doesn't belong on the same page as a dozen criteria.
-  Future<void> _openForm() async {
-    final entry = await showDialog<EntryResult>(
+  /// Creates the project with the default criteria and opens it right away.
+  Future<void> _create() async {
+    final db = AppDatabase.instance;
+    final name = await showDialog<String>(
       context: context,
-      builder: (_) => EntryDialog(
+      builder: (_) => NameDialog(
         title: '새 목록',
-        nameHint: '예: 2026 봄 이사',
-        confirmLabel: '다음',
-        nameCheck: (name) async =>
-            await AppDatabase.instance.projectNameExists(name)
-            ? '같은 이름의 목록이 이미 있어요.'
-            : null,
+        hint: '2026 봄 이사',
+        confirmLabel: '만들기',
+        check: (name) async =>
+            await db.projectNameExists(name) ? '같은 이름의 목록이 있어요' : null,
       ),
     );
-    if (entry == null || !mounted) return;
+    if (name == null || !mounted) return;
 
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(builder: (_) => ProjectFormScreen(name: entry.name)),
+    final id = await db.createProject(name);
+    if (!mounted) return;
+    HapticFeedback.lightImpact();
+
+    final project = Project(id: id, name: name, createdAt: DateTime.now());
+    final route = MaterialPageRoute<void>(
+      builder: (_) => ProjectScreen(project: project),
     );
+    final navigator = Navigator.of(context);
+    showUndo(
+      '‘$name’${objectJosa(name)} 만들었어요',
+      onUndo: () async {
+        if (route.isActive) navigator.removeRoute(route);
+        await db.deleteProject(id);
+        await _refresh();
+      },
+    );
+    await navigator.push(route);
     await _refresh();
   }
 
-  Future<void> _openProject(Project project) async {
+  Future<void> _open(Project project) async {
     await Navigator.of(context).push<void>(
-      MaterialPageRoute(builder: (_) => ProjectDetailScreen(project: project)),
+      MaterialPageRoute(builder: (_) => ProjectScreen(project: project)),
     );
     await _refresh();
   }
@@ -73,22 +87,22 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
     await _refresh();
   }
 
-  /// Deleting a project removes everything in it, so it takes a confirmation on top of the double tap.
-  Future<void> _confirmDelete(Project project) async {
-    final ok = await confirmDestructive(
-      context,
-      title: '‘${project.name}’ 삭제',
-      message: '이 목록의 건물과 방, 점수와 사진·영상이 모두 지워집니다.',
-    );
-    if (!ok || !mounted) return;
-
-    await AppDatabase.instance.deleteProject(project.id!);
-    if (!mounted) return;
+  Future<void> _delete(Project project) async {
+    final deletion = AppDatabase.instance.stageProjectDeletion(project.id);
     await _refresh();
+    if (!mounted) return;
+
+    showDeletionUndo(
+      '‘${project.name}’${objectJosa(project.name)} 삭제했어요',
+      deletion,
+      onUndone: _refresh,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
+
     return Scaffold(
       body: SafeArea(
         bottom: false,
@@ -108,13 +122,13 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
                       const Expanded(
                         child: ScreenTitle(
                           title: '보러가요',
-                          subtitle: '오늘 본 집, 잊기 전에 점수로 남겨요.',
+                          subtitle: '오늘 본 집, 잊기 전에 점수로 남겨요',
                         ),
                       ),
                       IconButton(
                         onPressed: _openSettings,
                         icon: const Icon(Icons.settings_outlined),
-                        color: context.palette.textMuted,
+                        color: palette.textMuted,
                         tooltip: '설정',
                       ),
                     ],
@@ -123,35 +137,28 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
                   if (_summaries.isEmpty)
                     EmptyState(
                       icon: Icons.home_work_outlined,
-                      title: '아직 만든 목록이 없어요',
-                      description: '이사 한 번에 목록 하나.\n보러 갈 집을 여기에 모아둡니다.',
-                      actionLabel: '첫 목록 만들기',
-                      onAction: _openForm,
+                      title: '아직 목록이 없어요',
+                      actionLabel: '새 목록 만들기',
+                      onAction: _create,
                     )
                   else
                     for (final summary in _summaries) ...[
                       _ProjectCard(
                         summary: summary,
-                        onTap: () => _openProject(summary.project),
-                        onDelete: () => _confirmDelete(summary.project),
+                        onTap: () => _open(summary.project),
+                        onDelete: () => _delete(summary.project),
                       ),
                       const SizedBox(height: 12),
                     ],
                 ],
               ),
       ),
-      floatingActionButton: _summaries.isEmpty && !_loading
+      floatingActionButton: _loading || _summaries.isEmpty
           ? null
-          : FloatingActionButton.extended(
-              onPressed: _openForm,
-              backgroundColor: context.palette.brand,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              icon: const Icon(Icons.add),
-              label: const Text(
-                '새 목록',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
+          : MainActionButton(
+              icon: Icons.add,
+              label: '새 목록',
+              onPressed: _create,
             ),
     );
   }
@@ -180,18 +187,32 @@ class _ProjectCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  summary.project.name,
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    color: palette.textStrong,
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        summary.project.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: palette.textStrong,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      formatDate(summary.project.createdAt),
+                      style: TextStyle(fontSize: 12, color: palette.textMuted),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '건물 ${summary.buildingCount}곳 · 방 ${summary.roomCount}칸 · '
-                  '${formatDate(summary.project.createdAt)}',
+                  '방 ${summary.roomCount} · 건물 ${summary.buildingCount}',
                   style: TextStyle(fontSize: 13.5, color: palette.textMuted),
                 ),
               ],

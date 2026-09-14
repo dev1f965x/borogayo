@@ -4,11 +4,12 @@
 
 Android app for house hunting. Set your criteria once, score every place you visit against them, and see the rooms ranked by score. The UI is in Korean.
 
-- Common criteria (light, noise, water pressure, transit…) are preset and editable
+- Default criteria (light, noise, water pressure, transit…) that you can edit for new lists
 - Building criteria are scored once per building; room criteria per room
-- Criteria are a 0–10 slider or yes/no, each with a weight from 1 to 5
-- Rooms get a score only after every criterion is rated, then rank across all buildings
-- Photos and videos tagged by area, with sharing
+- Criteria are a 0–10 score or yes/no, each with a weight from 1 to 5
+- Rooms get a score once every criterion is rated, and rank across all buildings
+- Photos and videos tagged by area, shared with a copied description
+- Changes save as you go, and any change can be undone
 - Everything stays on the device; no account or network
 
 ## Build

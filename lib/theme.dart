@@ -15,6 +15,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
     required this.star,
     required this.done,
     required this.danger,
+    required this.toast,
+    required this.onToast,
+    required this.toastAction,
   });
 
   final Color brand;
@@ -28,6 +31,11 @@ class AppPalette extends ThemeExtension<AppPalette> {
   final Color done;
   final Color danger;
 
+  /// Toasts stay dark in both themes, so they read as floating above the page.
+  final Color toast;
+  final Color onToast;
+  final Color toastAction;
+
   static const light = AppPalette(
     brand: Color(0xFF7B6A8D),
     background: Color(0xFFF5F4F7),
@@ -39,6 +47,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
     star: Color(0xFFF5A623),
     done: Color(0xFF3E9B72),
     danger: Color(0xFFD64545),
+    toast: Color(0xFF2B2832),
+    onToast: Color(0xFFF3F1F6),
+    toastAction: Color(0xFFCDBEDD),
   );
 
   static const dark = AppPalette(
@@ -52,6 +63,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
     star: Color(0xFFF5B342),
     done: Color(0xFF54B98C),
     danger: Color(0xFFE86A6A),
+    toast: Color(0xFF38343F),
+    onToast: Color(0xFFF3F1F6),
+    toastAction: Color(0xFFCDBEDD),
   );
 
   @override
@@ -66,6 +80,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
     Color? star,
     Color? done,
     Color? danger,
+    Color? toast,
+    Color? onToast,
+    Color? toastAction,
   }) {
     return AppPalette(
       brand: brand ?? this.brand,
@@ -78,6 +95,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
       star: star ?? this.star,
       done: done ?? this.done,
       danger: danger ?? this.danger,
+      toast: toast ?? this.toast,
+      onToast: onToast ?? this.onToast,
+      toastAction: toastAction ?? this.toastAction,
     );
   }
 
@@ -95,6 +115,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
       star: Color.lerp(star, other.star, t)!,
       done: Color.lerp(done, other.done, t)!,
       danger: Color.lerp(danger, other.danger, t)!,
+      toast: Color.lerp(toast, other.toast, t)!,
+      onToast: Color.lerp(onToast, other.onToast, t)!,
+      toastAction: Color.lerp(toastAction, other.toastAction, t)!,
     );
   }
 }
@@ -172,11 +195,20 @@ ThemeData buildAppTheme(Brightness brightness) {
         borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
       ),
     ),
-    snackBarTheme: SnackBarThemeData(
-      behavior: SnackBarBehavior.floating,
-      backgroundColor: palette.textStrong,
-      contentTextStyle: TextStyle(color: palette.surface, fontSize: 14),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    bottomSheetTheme: BottomSheetThemeData(
+      backgroundColor: palette.surface,
+      surfaceTintColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+    ),
+    tabBarTheme: TabBarThemeData(
+      labelColor: palette.textStrong,
+      unselectedLabelColor: palette.textMuted,
+      indicatorColor: palette.brand,
+      indicatorSize: TabBarIndicatorSize.tab,
+      dividerColor: palette.border,
+      labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
     ),
     popupMenuTheme: PopupMenuThemeData(
       color: palette.surface,
@@ -256,17 +288,10 @@ class ScreenTitle extends StatelessWidget {
 
 /// Card container used throughout the lists.
 class AppCard extends StatelessWidget {
-  const AppCard({
-    super.key,
-    required this.child,
-    this.onTap,
-    this.onLongPress,
-    this.borderColor,
-  });
+  const AppCard({super.key, required this.child, this.onTap, this.borderColor});
 
   final Widget child;
   final VoidCallback? onTap;
-  final VoidCallback? onLongPress;
 
   /// Only for cards that should stand out, such as top ranks. Defaults to the normal border.
   final Color? borderColor;
@@ -281,7 +306,6 @@ class AppCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
       child: InkWell(
         onTap: onTap,
-        onLongPress: onLongPress,
         borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
         child: Container(
           decoration: BoxDecoration(
@@ -322,20 +346,18 @@ class ProgressBar extends StatelessWidget {
   }
 }
 
-/// Placeholder card for empty states, with a call-to-action button.
+/// Placeholder card for empty states, with an optional call-to-action button.
 class EmptyState extends StatelessWidget {
   const EmptyState({
     super.key,
     required this.icon,
     required this.title,
-    required this.description,
     this.actionLabel,
     this.onAction,
   });
 
   final IconData icon;
   final String title;
-  final String description;
   final String? actionLabel;
   final VoidCallback? onAction;
 
@@ -362,16 +384,6 @@ class EmptyState extends StatelessWidget {
               color: palette.textBody,
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            description,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 13.5,
-              color: palette.textMuted,
-              height: 1.5,
-            ),
-          ),
           if (actionLabel != null && onAction != null) ...[
             const SizedBox(height: 20),
             OutlinedButton(
@@ -394,6 +406,78 @@ class EmptyState extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// Rounded choice used for areas and buildings in sheets.
+///
+/// [creates] marks the option that makes something new instead of picking an existing one.
+/// It is drawn as an outline so it stands apart from the regular choices.
+class PillChoice extends StatelessWidget {
+  const PillChoice({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.icon,
+    this.creates = false,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final IconData? icon;
+  final bool creates;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final (background, border, foreground) = switch ((creates, selected)) {
+      (true, true) => (
+        palette.brand.withValues(alpha: 0.14),
+        palette.brand,
+        palette.brand,
+      ),
+      (true, false) => (
+        Colors.transparent,
+        palette.brand.withValues(alpha: 0.45),
+        palette.brand,
+      ),
+      (false, true) => (palette.brand, palette.brand, Colors.white),
+      (false, false) => (palette.background, palette.border, palette.textMuted),
+    };
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(99),
+          border: Border.all(
+            color: border,
+            width: creates && selected ? 1.4 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 14, color: foreground),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+                color: foreground,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

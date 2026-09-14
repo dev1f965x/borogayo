@@ -5,72 +5,75 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../db/database.dart';
-import '../../media/media_share.dart';
 import '../../media/media_store.dart';
 import '../../models/models.dart';
+import '../../text/josa.dart';
 import '../../theme.dart';
 import '../media_viewer_screen.dart';
-import 'confirm_dialog.dart';
 import 'media_area_picker.dart';
+import 'toast.dart';
 
 /// Choice made in the add sheet: area, and where to take the media from.
 typedef _AddRequest = ({String label, ImageSource source, MediaKind kind});
 
-/// Where media can be moved: the building itself or one of its rooms.
+/// Where media can be placed: the building itself or one of its rooms.
 typedef _Place = ({int? buildingId, int? roomId, String name});
 
 /// Photos and videos attached to a building or room.
 ///
-/// A null [room] means the building's section. The building is always required,
-/// since both cases list it as a place to move media to.
+/// A null [room] means the building's own media. Moving media changes both sections on the
+/// room screen, so [revision] and [onPlacementChanged] keep them in sync.
 class MediaSection extends StatefulWidget {
-  const MediaSection({super.key, required this.building, this.room});
+  const MediaSection({
+    super.key,
+    required this.building,
+    this.room,
+    required this.revision,
+    required this.onPlacementChanged,
+  });
 
   final Building building;
   final Room? room;
+  final int revision;
+  final VoidCallback onPlacementChanged;
 
   @override
   State<MediaSection> createState() => _MediaSectionState();
 }
 
 class _MediaSectionState extends State<MediaSection> {
+  /// Last area used for building and room media, preselected on the next add.
+  static final _lastLabel = <bool, String>{};
+
   List<MediaItem> _items = [];
-  List<Room> _siblings = [];
+  List<Room> _rooms = [];
   String? _filter;
   bool _loading = true;
   bool _busy = false;
 
-  int? get _buildingId => widget.room == null ? widget.building.id : null;
+  bool get _isBuilding => widget.room == null;
+  int? get _buildingId => _isBuilding ? widget.building.id : null;
   int? get _roomId => widget.room?.id;
 
-  /// Context sent along when sharing, e.g. `대성빌라 302호`.
-  String get _ownerLabel => widget.room == null
+  String get _ownerLabel => _isBuilding
       ? widget.building.name
       : '${widget.building.name} ${widget.room!.name}';
 
-  List<String> get _labels => areaPresetsFor(isBuilding: widget.room == null);
-
-  /// Only areas actually in use become filters, custom ones included;
-  /// listing empty areas would be noise.
-  List<String> get _usedLabels {
-    final used = <String>[];
-    for (final item in _items) {
-      final label = item.label;
-      if (label != null && !used.contains(label)) used.add(label);
-    }
-    return used;
-  }
+  /// Only areas actually in use become filters, custom ones included.
+  List<String> get _usedLabels => [
+    ...{for (final item in _items) ?item.label},
+  ];
 
   List<MediaItem> get _visibleItems => _filter == null
       ? _items
       : _items.where((item) => item.label == _filter).toList();
 
-  /// Every place media can go, **including where it is now**: fixing a wrong area
-  /// (living room shot filed under kitchen) is more common than moving it elsewhere.
+  /// Every place media can go, including where it is now: fixing a wrong area is more
+  /// common than moving it elsewhere.
   List<_Place> get _places => [
     (buildingId: widget.building.id, roomId: null, name: widget.building.name),
-    for (final sibling in _siblings)
-      (buildingId: null, roomId: sibling.id, name: sibling.name),
+    for (final room in _rooms)
+      (buildingId: null, roomId: room.id, name: room.name),
   ];
 
   @override
@@ -79,15 +82,20 @@ class _MediaSectionState extends State<MediaSection> {
     _refresh();
   }
 
+  @override
+  void didUpdateWidget(MediaSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.revision != widget.revision) _refresh();
+  }
+
   Future<void> _refresh() async {
     final db = AppDatabase.instance;
     final items = await db.readMedia(buildingId: _buildingId, roomId: _roomId);
-    final siblings = await db.readRooms(widget.building.id!);
+    final rooms = await db.readRooms(widget.building.id);
     if (!mounted) return;
     setState(() {
       _items = items;
-      _siblings = siblings;
-      // Clear the filter once its area has no media left.
+      _rooms = rooms;
       if (_filter != null && !items.any((item) => item.label == _filter)) {
         _filter = null;
       }
@@ -100,12 +108,11 @@ class _MediaSectionState extends State<MediaSection> {
 
     final request = await showModalBottomSheet<_AddRequest>(
       context: context,
-      backgroundColor: context.palette.surface,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      builder: (_) => _AddMediaSheet(
+        labels: areaPresetsFor(isBuilding: _isBuilding),
+        initialLabel: _filter ?? _lastLabel[_isBuilding],
       ),
-      builder: (_) => _AddMediaSheet(labels: _labels, initialLabel: _filter),
     );
     if (request == null || !mounted) return;
 
@@ -117,62 +124,60 @@ class _MediaSectionState extends State<MediaSection> {
           : await picker.pickVideo(source: request.source);
       if (picked == null) return;
 
-      final storedPath = await MediaStore.save(picked.path);
+      final path = await MediaStore.save(picked.path);
       final thumbPath = request.kind == MediaKind.video
-          ? await MediaStore.saveVideoThumbnail(storedPath)
+          ? await MediaStore.saveVideoThumbnail(path)
           : null;
-
-      await AppDatabase.instance.addMedia(
+      final id = await AppDatabase.instance.addMedia(
         buildingId: _buildingId,
         roomId: _roomId,
-        path: storedPath,
+        path: path,
         kind: request.kind,
         label: request.label,
         thumbPath: thumbPath,
       );
+      _lastLabel[_isBuilding] = request.label;
       if (!mounted) return;
       HapticFeedback.lightImpact();
       await _refresh();
+      if (!mounted) return;
+
+      final kind = mediaKindLabel(request.kind);
+      showUndo(
+        '$kind${objectJosa(kind)} 추가했어요',
+        onUndo: () async {
+          await AppDatabase.instance.deleteMedia(id);
+          await MediaStore.deleteFiles(path, thumbPath);
+          await _refresh();
+        },
+      );
     } on Exception {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('불러오지 못했어요. 다시 시도해주세요.')));
+      showToast('불러오지 못했어요');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
   Future<void> _open(MediaItem item) async {
-    final items = _visibleItems;
+    final visible = _visibleItems;
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) => MediaViewerScreen(
-          items: items,
-          initialIndex: items.indexOf(item),
+          items: visible,
+          allItems: _items,
+          initialIndex: visible.indexOf(item),
           ownerLabel: _ownerLabel,
         ),
       ),
     );
-    await _refresh();
   }
 
-  /// Shares what's currently visible. The filter doubles as the selection tool,
-  /// so there's no separate multi-select mode.
-  Future<void> _share() async {
-    await shareMedia(context, ownerLabel: _ownerLabel, items: _visibleItems);
-  }
-
-  /// Long-press menu.
   Future<void> _showItemMenu(MediaItem item) async {
     final palette = context.palette;
-    final kind = item.kind == MediaKind.photo ? '사진' : '영상';
 
     final action = await showModalBottomSheet<String>(
       context: context,
-      backgroundColor: palette.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
       builder: (sheetContext) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -184,16 +189,12 @@ class _MediaSectionState extends State<MediaSection> {
                 '위치·구역 수정',
                 style: TextStyle(fontSize: 15, color: palette.textBody),
               ),
-              subtitle: Text(
-                '구역을 잘못 골랐거나 건물↔방이 바뀌었을 때',
-                style: TextStyle(fontSize: 12.5, color: palette.textMuted),
-              ),
               onTap: () => Navigator.pop(sheetContext, 'edit'),
             ),
             ListTile(
               leading: Icon(Icons.delete_outline, color: palette.danger),
               title: Text(
-                '$kind 삭제',
+                '${mediaKindLabel(item.kind)} 삭제',
                 style: TextStyle(fontSize: 15, color: palette.danger),
               ),
               onTap: () => Navigator.pop(sheetContext, 'delete'),
@@ -206,13 +207,13 @@ class _MediaSectionState extends State<MediaSection> {
     if (action == null || !mounted) return;
 
     if (action == 'edit') {
-      await _edit(item);
+      await _place(item);
     } else {
-      await _delete(item);
+      _delete(item);
     }
   }
 
-  Future<void> _edit(MediaItem item) async {
+  Future<void> _place(MediaItem item) async {
     final current = _places.firstWhere(
       (place) => item.buildingId != null
           ? place.buildingId == item.buildingId
@@ -222,12 +223,8 @@ class _MediaSectionState extends State<MediaSection> {
 
     final result = await showModalBottomSheet<({_Place place, String label})>(
       context: context,
-      backgroundColor: context.palette.surface,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => _EditMediaSheet(
+      builder: (_) => _PlaceMediaSheet(
         places: _places,
         current: current,
         currentLabel: item.label,
@@ -235,43 +232,44 @@ class _MediaSectionState extends State<MediaSection> {
     );
     if (result == null || !mounted) return;
 
-    final moved = result.place != current;
-    await AppDatabase.instance.moveMedia(
-      item.id!,
+    final db = AppDatabase.instance;
+    await db.placeMedia(
+      item.id,
       buildingId: result.place.buildingId,
       roomId: result.place.roomId,
       label: result.label,
     );
     if (!mounted) return;
-    HapticFeedback.mediumImpact();
-    await _refresh();
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          moved
-              ? '‘${result.place.name}’(으)로 옮겼어요'
-              : '‘${result.label}’(으)로 바꿨어요',
-        ),
-      ),
+    HapticFeedback.lightImpact();
+    widget.onPlacementChanged();
+
+    final moved = result.place != current;
+    final target = moved ? result.place.name : result.label;
+    showUndo(
+      '‘$target’${directionJosa(target)} ${moved ? '옮겼어요' : '바꿨어요'}',
+      onUndo: () async {
+        await db.placeMedia(
+          item.id,
+          buildingId: item.buildingId,
+          roomId: item.roomId,
+          label: item.label,
+        );
+        widget.onPlacementChanged();
+      },
     );
   }
 
-  Future<void> _delete(MediaItem item) async {
-    final ok = await confirmDestructive(
-      context,
-      title: '이 ${item.kind == MediaKind.photo ? '사진' : '영상'} 삭제',
-      message: '되돌릴 수 없어요.',
-    );
-    if (!ok || !mounted) return;
+  void _delete(MediaItem item) {
+    final deletion = AppDatabase.instance.stageMediaDeletion(item.id);
+    _refresh();
 
-    await AppDatabase.instance.deleteMedia(item.id!);
-    await MediaStore.delete(item.path);
-    final thumbPath = item.thumbPath;
-    if (thumbPath != null) await MediaStore.delete(thumbPath);
-    if (!mounted) return;
-    HapticFeedback.mediumImpact();
-    await _refresh();
+    final kind = mediaKindLabel(item.kind);
+    showDeletionUndo(
+      '$kind${objectJosa(kind)} 삭제했어요',
+      deletion,
+      onUndone: _refresh,
+      afterCommit: () => MediaStore.deleteFiles(item.path, item.thumbPath),
+    );
   }
 
   @override
@@ -285,28 +283,21 @@ class _MediaSectionState extends State<MediaSection> {
         Row(
           children: [
             Text(
-              '사진 · 영상',
+              '사진·영상',
               style: TextStyle(
-                fontSize: 15,
+                fontSize: 14,
                 fontWeight: FontWeight.w700,
-                color: palette.textStrong,
+                color: palette.textBody,
               ),
             ),
-            const SizedBox(width: 6),
-            if (_items.isNotEmpty)
+            if (_items.isNotEmpty) ...[
+              const SizedBox(width: 6),
               Text(
                 '${_items.length}',
                 style: TextStyle(fontSize: 13, color: palette.textMuted),
               ),
+            ],
             const Spacer(),
-            if (_items.isNotEmpty)
-              IconButton(
-                onPressed: _share,
-                icon: const Icon(Icons.ios_share, size: 19),
-                color: palette.textMuted,
-                visualDensity: VisualDensity.compact,
-                tooltip: _filter == null ? '전부 공유' : '‘$_filter’ 공유',
-              ),
             TextButton.icon(
               onPressed: _busy ? null : _add,
               icon: const Icon(Icons.add, size: 18),
@@ -315,7 +306,6 @@ class _MediaSectionState extends State<MediaSection> {
           ],
         ),
         if (_usedLabels.length > 1) ...[
-          const SizedBox(height: 2),
           SizedBox(
             height: 34,
             child: ListView(
@@ -335,21 +325,21 @@ class _MediaSectionState extends State<MediaSection> {
               ],
             ),
           ),
+          const SizedBox(height: 8),
         ],
-        const SizedBox(height: 8),
         if (_loading)
           const SizedBox(height: 96)
         else if (_items.isEmpty)
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 24),
+            padding: const EdgeInsets.symmetric(vertical: 22),
             decoration: BoxDecoration(
               color: palette.surface,
               borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
               border: Border.all(color: palette.border),
             ),
             child: Text(
-              '현장에서 찍어두면 나중에 비교할 때 기억이 안 섞여요.',
+              '사진이나 영상을 추가해 보세요',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 13, color: palette.textMuted),
             ),
@@ -373,9 +363,7 @@ class _MediaSectionState extends State<MediaSection> {
   }
 }
 
-/// Single sheet that picks the area first and then captures or chooses media.
-///
-/// Asking for the area as a separate later step gets skipped on site.
+/// Picks the area first, then capture or gallery, in one sheet.
 class _AddMediaSheet extends StatefulWidget {
   const _AddMediaSheet({required this.labels, this.initialLabel});
 
@@ -398,12 +386,6 @@ class _AddMediaSheetState extends State<_AddMediaSheet> {
     super.dispose();
   }
 
-  void _pick(ImageSource source, MediaKind kind) {
-    final label = _picker.label;
-    if (label.isEmpty) return;
-    Navigator.pop(context, (label: label, source: source, kind: kind));
-  }
-
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
@@ -419,11 +401,11 @@ class _AddMediaSheetState extends State<_AddMediaSheet> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
               child: Text(
-                '어디를 찍은 건가요?',
+                '어디를 찍었나요?',
                 style: TextStyle(
-                  fontSize: 15,
+                  fontSize: 17,
                   fontWeight: FontWeight.w700,
                   color: palette.textStrong,
                 ),
@@ -437,7 +419,7 @@ class _AddMediaSheetState extends State<_AddMediaSheet> {
               ),
             ),
             const SizedBox(height: 12),
-            for (final option in const [
+            for (final (icon, label, source, kind) in const [
               (
                 Icons.photo_camera_outlined,
                 '사진 촬영',
@@ -466,17 +448,21 @@ class _AddMediaSheetState extends State<_AddMediaSheet> {
               ListTile(
                 enabled: ready,
                 leading: Icon(
-                  option.$1,
+                  icon,
                   color: ready ? palette.textBody : palette.textMuted,
                 ),
                 title: Text(
-                  option.$2,
+                  label,
                   style: TextStyle(
                     fontSize: 15,
                     color: ready ? palette.textBody : palette.textMuted,
                   ),
                 ),
-                onTap: () => _pick(option.$3, option.$4),
+                onTap: () => Navigator.pop(context, (
+                  label: _picker.label,
+                  source: source,
+                  kind: kind,
+                )),
               ),
             const SizedBox(height: 8),
           ],
@@ -486,9 +472,10 @@ class _AddMediaSheetState extends State<_AddMediaSheet> {
   }
 }
 
-/// Sheet for changing where media is attached and its area; moving changes the area names, so both are chosen together.
-class _EditMediaSheet extends StatefulWidget {
-  const _EditMediaSheet({
+/// Changes where media is attached and its area. The area names depend on the place,
+/// so both are chosen together.
+class _PlaceMediaSheet extends StatefulWidget {
+  const _PlaceMediaSheet({
     required this.places,
     required this.current,
     this.currentLabel,
@@ -499,16 +486,15 @@ class _EditMediaSheet extends StatefulWidget {
   final String? currentLabel;
 
   @override
-  State<_EditMediaSheet> createState() => _EditMediaSheetState();
+  State<_PlaceMediaSheet> createState() => _PlaceMediaSheetState();
 }
 
-class _EditMediaSheetState extends State<_EditMediaSheet> {
+class _PlaceMediaSheetState extends State<_PlaceMediaSheet> {
   late _Place _place = widget.current;
   late AreaPickerController _picker = _pickerFor(_place);
 
   AreaPickerController _pickerFor(_Place place) => AreaPickerController(
     labels: areaPresetsFor(isBuilding: place.buildingId != null),
-    // Keep the area name when it still makes sense at the new place.
     initial: widget.currentLabel,
   );
 
@@ -556,7 +542,7 @@ class _EditMediaSheetState extends State<_EditMediaSheet> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '위치와 구역',
+              '위치·구역 수정',
               style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w700,
@@ -564,13 +550,13 @@ class _EditMediaSheetState extends State<_EditMediaSheet> {
               ),
             ),
             const SizedBox(height: 16),
-            label('붙일 곳'),
+            label('위치'),
             Wrap(
               spacing: 6,
               runSpacing: 6,
               children: [
                 for (final place in widget.places)
-                  AreaChoiceChip(
+                  PillChoice(
                     label: place.name,
                     icon: place.buildingId != null
                         ? Icons.apartment_outlined
@@ -582,21 +568,19 @@ class _EditMediaSheetState extends State<_EditMediaSheet> {
             ),
             const SizedBox(height: 18),
             label('구역'),
-            AreaPicker(
-              // A different place has a different set of areas, so rebuild the picker.
-              key: ValueKey(_place),
-              controller: _picker,
-              onChanged: () => setState(() {}),
-            ),
+            AreaPicker(controller: _picker, onChanged: () => setState(() {})),
             const SizedBox(height: 20),
-            FilledButton(
-              onPressed: _picker.label.isEmpty
-                  ? null
-                  : () => Navigator.pop(context, (
-                      place: _place,
-                      label: _picker.label,
-                    )),
-              child: const Text('저장'),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _picker.label.isEmpty
+                    ? null
+                    : () => Navigator.pop(context, (
+                        place: _place,
+                        label: _picker.label,
+                      )),
+                child: const Text('저장'),
+              ),
             ),
           ],
         ),

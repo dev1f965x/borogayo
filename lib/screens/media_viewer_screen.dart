@@ -6,16 +6,21 @@ import 'package:video_player/video_player.dart';
 import '../media/media_share.dart';
 import '../models/models.dart';
 
-/// Full-screen photo and video viewer with horizontal paging.
+/// Full-screen photo and video viewer with horizontal paging. Sharing starts here.
 class MediaViewerScreen extends StatefulWidget {
   const MediaViewerScreen({
     super.key,
     required this.items,
+    required this.allItems,
     required this.initialIndex,
     required this.ownerLabel,
   });
 
+  /// The items paged through, which may be one area only.
   final List<MediaItem> items;
+
+  /// Everything in the section, offered as a larger share choice.
+  final List<MediaItem> allItems;
   final int initialIndex;
 
   /// Context sent along when sharing, e.g. `대성빌라 302호`.
@@ -37,6 +42,46 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
     super.dispose();
   }
 
+  Future<void> _share() async {
+    final current = widget.items[_index];
+    final sameArea = current.label == null
+        ? const <MediaItem>[]
+        : widget.allItems.where((item) => item.label == current.label).toList();
+
+    final choices = <(String, List<MediaItem>)>[
+      ('이 ${mediaKindLabel(current.kind)}만', [current]),
+      if (sameArea.length > 1)
+        ('‘${current.label}’ ${sameArea.length}개', sameArea),
+      if (widget.allItems.length > sameArea.length &&
+          widget.allItems.length > 1)
+        ('전체 ${widget.allItems.length}개', widget.allItems),
+    ];
+
+    final items = choices.length == 1
+        ? choices.single.$2
+        : await showModalBottomSheet<List<MediaItem>>(
+            context: context,
+            builder: (sheetContext) => SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 8),
+                  for (final (label, items) in choices)
+                    ListTile(
+                      leading: const Icon(Icons.ios_share),
+                      title: Text(label),
+                      onTap: () => Navigator.pop(sheetContext, items),
+                    ),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            ),
+          );
+    if (items == null || !mounted) return;
+
+    await shareMedia(ownerLabel: widget.ownerLabel, items: items);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -53,11 +98,7 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
         ),
         actions: [
           IconButton(
-            onPressed: () => shareMedia(
-              context,
-              ownerLabel: widget.ownerLabel,
-              items: [widget.items[_index]],
-            ),
+            onPressed: _share,
             icon: const Icon(Icons.ios_share),
             tooltip: '공유',
           ),
@@ -162,23 +203,29 @@ class _VideoPageState extends State<_VideoPage> {
         child: Stack(
           children: [
             Positioned.fill(child: VideoPlayer(controller)),
+            // Listens to the player so the play icon also returns when a video ends.
             Positioned.fill(
-              child: GestureDetector(
-                onTap: () => setState(() {
-                  controller.value.isPlaying
-                      ? controller.pause()
-                      : controller.play();
-                }),
-                child: AnimatedOpacity(
-                  opacity: controller.value.isPlaying ? 0 : 1,
-                  duration: const Duration(milliseconds: 150),
-                  child: Container(
-                    color: Colors.black26,
-                    alignment: Alignment.center,
-                    child: const Icon(
-                      Icons.play_arrow_rounded,
-                      size: 64,
-                      color: Colors.white,
+              child: ValueListenableBuilder(
+                valueListenable: controller,
+                builder: (context, video, _) => GestureDetector(
+                  onTap: () async {
+                    if (video.isPlaying) return controller.pause();
+                    if (video.position >= video.duration) {
+                      await controller.seekTo(Duration.zero);
+                    }
+                    await controller.play();
+                  },
+                  child: AnimatedOpacity(
+                    opacity: video.isPlaying ? 0 : 1,
+                    duration: const Duration(milliseconds: 150),
+                    child: Container(
+                      color: Colors.black26,
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        Icons.play_arrow_rounded,
+                        size: 64,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
