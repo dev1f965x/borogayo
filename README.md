@@ -13,6 +13,10 @@ Android app for house hunting. Set your criteria once, score every place you vis
 - Changes save as you go, and any change can be undone
 - Everything stays on the device; no account or network
 
+## Install
+
+Download `borogayo-<version>.apk` from [Releases](https://github.com/dev1f965x/borogayo/releases) and open it on an Android 7.0+ phone. Allow installing from that app when asked.
+
 ## Build
 
 Requires the [Flutter SDK](https://docs.flutter.dev/get-started/install) and the Android SDK.
@@ -24,6 +28,17 @@ adb install -r build/app/outputs/flutter-apk/app-release.apk
 ```
 
 `-r` keeps app data. `flutter install` uninstalls the app first and wipes it.
+
+Release builds are signed with the key described in `android/key.properties`, which is not in the repository:
+
+```properties
+storeFile=path/to/release.jks
+storePassword=...
+keyAlias=borogayo
+keyPassword=...
+```
+
+Without that file the debug key is used. An app signed with one key can't be updated by an APK signed with another.
 
 ## Test
 

@@ -13,6 +13,10 @@
 - 바꾼 내용은 바로 저장되고, 모든 변경을 되돌릴 수 있습니다
 - 데이터는 기기에만 저장됩니다. 계정이나 네트워크를 쓰지 않습니다
 
+## 설치
+
+[Releases](https://github.com/dev1f965x/borogayo/releases)에서 `borogayo-<버전>.apk`를 받아 Android 7.0 이상 폰에서 열면 됩니다. 출처를 알 수 없는 앱 설치를 물으면 허용해 주세요.
+
 ## 빌드
 
 [Flutter SDK](https://docs.flutter.dev/get-started/install)와 Android SDK가 필요합니다.
@@ -24,6 +28,17 @@ adb install -r build/app/outputs/flutter-apk/app-release.apk
 ```
 
 `-r`로 설치해야 앱 데이터가 유지됩니다. `flutter install`은 기존 앱을 지운 뒤 설치해서 데이터가 사라집니다.
+
+릴리즈 빌드는 `android/key.properties`에 적힌 키로 서명합니다. 이 파일은 레포에 없습니다.
+
+```properties
+storeFile=path/to/release.jks
+storePassword=...
+keyAlias=borogayo
+keyPassword=...
+```
+
+파일이 없으면 디버그 키로 서명합니다. 서명 키가 다르면 기존 앱 위에 업데이트 설치가 되지 않습니다.
 
 ## 테스트
 
