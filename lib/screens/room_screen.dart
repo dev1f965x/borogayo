@@ -7,7 +7,7 @@ import '../models/models.dart';
 import '../theme.dart';
 import 'widgets/criterion_score_card.dart';
 import 'widgets/inline_name.dart';
-import 'widgets/media_section.dart';
+import 'widgets/media/media_section.dart';
 import 'widgets/toast.dart';
 
 /// Everything about one room, in two tabs: the building's shared ratings and photos, and

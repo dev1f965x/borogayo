@@ -9,6 +9,7 @@ import '../theme.dart';
 import 'criteria_screen.dart';
 import 'room_screen.dart';
 import 'widgets/inline_name.dart';
+import 'widgets/main_action_button.dart';
 import 'widgets/room_card.dart';
 import 'widgets/room_entry_sheet.dart';
 import 'widgets/toast.dart';

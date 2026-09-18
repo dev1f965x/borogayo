@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:borogayo/models/models.dart';
 import 'package:borogayo/screens/widgets/criterion_editor.dart';
+import 'package:borogayo/screens/widgets/main_action_button.dart';
 import 'package:borogayo/screens/widgets/name_dialog.dart';
 import 'package:borogayo/screens/widgets/toast.dart';
 import 'package:borogayo/theme.dart';
