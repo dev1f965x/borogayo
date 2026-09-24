@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "borogayo",
-  "version": "0.1.0",
+  "version": "2.0.0",
   "identifier": "io.github.dev1f965x.borogayo",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -12,24 +12,29 @@
   "app": {
     "windows": [
       {
-        "title": "borogayo",
-        "width": 800,
-        "height": 600
+        "title": "보러가요",
+        "width": 420,
+        "height": 820,
+        "minWidth": 360,
+        "minHeight": 560,
+        "center": true
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:"
     }
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": [],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "publisher": "dev1f965x",
+    "shortDescription": "집 보러 다니며 같은 기준으로 점수 매기는 앱"
   }
 }

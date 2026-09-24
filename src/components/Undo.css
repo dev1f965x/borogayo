@@ -1,0 +1,50 @@
+/* Floats over the fridge, within the thumb's reach and clear of the button it undoes. */
+.undo {
+  position: fixed;
+  right: var(--space-4);
+  bottom: calc(var(--tap) + var(--space-5) + env(safe-area-inset-bottom));
+  left: var(--space-4);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  max-width: 480px;
+  margin: 0 auto;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-raised);
+  animation: undo-rise 160ms ease-out;
+}
+
+@keyframes undo-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.undo__message {
+  color: var(--text-body);
+  font-size: var(--text-small);
+  overflow-wrap: anywhere;
+}
+
+.undo__action {
+  flex-shrink: 0;
+  height: 36px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-pill);
+  background: var(--accent-quiet);
+  color: var(--accent);
+  cursor: pointer;
+  font-size: var(--text-small);
+  font-weight: 600;
+}
+
+.undo__action:hover {
+  background: var(--accent);
+  color: var(--surface-raised);
+}

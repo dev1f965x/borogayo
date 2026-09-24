@@ -1,0 +1,219 @@
+.criteria {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.criteria__intro {
+  color: var(--text-muted);
+  font-size: var(--text-small);
+}
+
+.criteria__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  list-style: none;
+}
+
+.criteria__item {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-medium);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+}
+
+.criteria__line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+}
+
+.criteria__emoji {
+  font-size: var(--text-title);
+  line-height: 1;
+}
+
+.criteria__name {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  padding: var(--space-1) 0;
+  color: var(--text-strong);
+  cursor: pointer;
+  font-weight: 600;
+  text-align: left;
+}
+
+.criteria__about {
+  color: var(--text-faint);
+  font-size: var(--text-small);
+  font-weight: 400;
+}
+
+.criteria__weight {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-quiet);
+  color: var(--accent);
+  font-size: var(--text-small);
+  font-weight: 600;
+}
+
+.criteria__order {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.criteria__move {
+  width: 32px;
+  height: 22px;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: var(--text-small);
+  line-height: 1;
+}
+
+.criteria__move:hover {
+  color: var(--accent);
+}
+
+.criteria__move:disabled {
+  color: var(--border-strong);
+  cursor: default;
+}
+
+.criteria__editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 0 var(--space-3) var(--space-3);
+}
+
+.criteria__what {
+  color: var(--text-muted);
+  font-size: var(--text-small);
+}
+
+.criteria__hint {
+  margin-top: calc(var(--space-1) * -1);
+  color: var(--text-faint);
+  font-size: var(--text-small);
+}
+
+.criteria__field {
+  width: 100%;
+  height: var(--tap);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-small);
+  background: var(--surface-raised);
+  color: var(--text-strong);
+}
+
+.criteria__field::placeholder {
+  color: var(--text-faint);
+}
+
+.criteria__weights,
+.criteria__row {
+  display: flex;
+  gap: var(--space-1);
+  border: none;
+}
+
+.criteria__pick {
+  flex: 1;
+  height: 38px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-small);
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: var(--text-small);
+}
+
+.criteria__pick:hover {
+  border-color: var(--border-strong);
+  color: var(--text-body);
+}
+
+.criteria__pick[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--surface-raised);
+  font-weight: 600;
+}
+
+.criteria__remove {
+  height: var(--tap);
+  margin-top: var(--space-1);
+  border-radius: var(--radius-small);
+  color: var(--poor);
+  cursor: pointer;
+  font-size: var(--text-small);
+}
+
+.criteria__remove:hover {
+  background: var(--surface-sunken);
+}
+
+.criteria__add {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-medium);
+}
+
+.criteria__submit {
+  flex-shrink: 0;
+  height: var(--tap);
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-small);
+  background: var(--accent);
+  color: var(--surface-raised);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.criteria__submit:hover {
+  background: var(--accent-bright);
+}
+
+.criteria__submit:disabled {
+  background: var(--surface-sunken);
+  color: var(--text-faint);
+  cursor: default;
+}
+
+.criteria__keeps {
+  color: var(--text-faint);
+  font-size: var(--text-small);
+}
+
+.criteria__empty {
+  margin: var(--space-5) 0;
+  text-align: center;
+}
+
+.criteria__empty-title {
+  color: var(--text-body);
+  font-size: var(--text-title);
+  font-weight: 600;
+}
+
+.criteria__empty-detail {
+  margin-top: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-small);
+}

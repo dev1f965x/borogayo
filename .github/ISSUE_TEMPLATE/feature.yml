@@ -1,0 +1,19 @@
+name: Feature
+description: Something to add
+labels: [feature]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does it solve
+      description: The friction of not having it, rather than the feature itself
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      placeholder: |
+        - Doing ... shows ...
+    validations:
+      required: true

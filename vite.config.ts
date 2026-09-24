@@ -1,32 +1,29 @@
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
-// @ts-expect-error type error without @types/node package
+import { readFileSync } from "node:fs";
 import process from "node:process";
-const host = process.env.TAURI_DEV_HOST;
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite";
 
-// https://vite.dev/config/
+const host = process.env.TAURI_DEV_HOST;
+const { version } = JSON.parse(readFileSync("package.json", "utf8"));
+
 export default defineConfig(() => ({
   plugins: [react()],
+  // The page is served from a project path on GitHub Pages and from the app root in the
+  // installed builds, so every asset is asked for relative to the page itself.
+  base: "./",
+  define: { __APP_VERSION__: JSON.stringify(version) },
 
-  // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
-  //
-  // 1. prevent Vite from obscuring rust errors
+  // Tauri prints its own errors, and expects the dev server on a fixed port.
   clearScreen: false,
-  // 2. tauri expects a fixed port, fail if that port is not available
   server: {
     port: 1420,
     strictPort: true,
     host: host || false,
-    hmr: host
-      ? {
-          protocol: "ws",
-          host,
-          port: 1421,
-        }
-      : undefined,
+    hmr: host ? { protocol: "ws", host, port: 1421 } : undefined,
     watch: {
-      // 3. tell Vite to ignore watching `src-tauri`
-      ignored: ["**/src-tauri/**"],
+      // Ignore what the build writes: Rust output and coverage reports are thousands of
+      // files, and watching them reloads the window in a loop.
+      ignored: ["**/src-tauri/**", "**/coverage/**", "**/dist/**"],
     },
   },
 }));

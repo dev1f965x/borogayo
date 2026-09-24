@@ -1,0 +1,20 @@
+.mark {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.mark__walls {
+  fill: var(--accent-quiet);
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.mark__check {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
