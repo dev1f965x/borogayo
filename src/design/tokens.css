@@ -1,0 +1,46 @@
+:root {
+  /* The purple the app has always been, on daylight surfaces: a clipboard, not a console. */
+  --surface-base: #f7f6fa;
+  --surface-raised: #ffffff;
+  --surface-sunken: #edebf2;
+  --border-subtle: #e4e1ec;
+  --border-strong: #cbc6d8;
+
+  --accent: #5b4b8a;
+  --accent-bright: #6f5da5;
+  --accent-quiet: #6f5da51a;
+
+  --good: #2f7d55;
+  --good-quiet: #2f7d551a;
+  --poor: #b0512f;
+
+  --text-strong: #1e1b26;
+  --text-body: #3a3543;
+  --text-muted: #5f5870;
+  --text-faint: #6b6379;
+
+  --text-small: 0.8125rem;
+  --text-base: 1rem;
+  --text-title: 1.125rem;
+  --text-display: 1.5rem;
+  --leading-body: 1.55;
+  --leading-title: 1.3;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  --radius-small: 10px;
+  --radius-medium: 16px;
+  --radius-large: 22px;
+  --radius-pill: 999px;
+
+  --shadow-card: 0 1px 2px rgb(30 27 38 / 0.06), 0 1px 1px rgb(30 27 38 / 0.04);
+  --shadow-raised: 0 -6px 28px rgb(30 27 38 / 0.14);
+
+  /* The thumb's reach, standing in someone's hallway with one hand free. */
+  --tap: 44px;
+}

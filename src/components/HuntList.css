@@ -1,0 +1,134 @@
+.hunts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.hunts__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  list-style: none;
+}
+
+.hunts__item {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-medium);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+}
+
+.hunts__open {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  text-align: left;
+}
+
+.hunts__name {
+  color: var(--text-strong);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.hunts__about {
+  color: var(--text-faint);
+  font-size: var(--text-small);
+}
+
+.hunts__remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: var(--tap);
+  height: var(--tap);
+  color: var(--text-faint);
+  cursor: pointer;
+}
+
+.hunts__remove svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.hunts__remove:hover {
+  color: var(--poor);
+}
+
+.hunts__empty {
+  margin: var(--space-6) 0;
+  text-align: center;
+}
+
+/* The mark again, big and quiet, so an empty list still says what this is. */
+.hunts__empty .mark {
+  width: 96px;
+  height: 96px;
+  margin-bottom: var(--space-3);
+}
+
+.hunts__empty .mark__walls {
+  fill: none;
+  stroke: var(--border-strong);
+}
+
+.hunts__empty .mark__check {
+  stroke: var(--border-strong);
+}
+
+.hunts__empty-title {
+  color: var(--text-body);
+  font-size: var(--text-title);
+  font-weight: 600;
+}
+
+.hunts__empty-detail {
+  margin-top: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-small);
+}
+
+.hunts__start {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.hunts__field {
+  flex: 1;
+  min-width: 0;
+  height: var(--tap);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-medium);
+  background: var(--surface-raised);
+  color: var(--text-strong);
+}
+
+.hunts__field::placeholder {
+  color: var(--text-faint);
+}
+
+.hunts__submit {
+  flex-shrink: 0;
+  height: var(--tap);
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-medium);
+  background: var(--accent);
+  color: var(--surface-raised);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.hunts__submit:hover {
+  background: var(--accent-bright);
+}

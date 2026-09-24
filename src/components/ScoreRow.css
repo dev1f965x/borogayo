@@ -1,0 +1,104 @@
+.score {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-medium);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+}
+
+/* An answered criterion recedes, so what is left to do is what stands out. */
+.score[data-answered="true"] {
+  border-color: transparent;
+  background: var(--surface-sunken);
+  box-shadow: none;
+}
+
+.score__box {
+  border: none;
+  padding: var(--space-3) var(--space-3) var(--space-2);
+}
+
+.score__what {
+  float: left;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 0;
+  margin-bottom: var(--space-2);
+}
+
+.score__emoji {
+  font-size: var(--text-title);
+  line-height: 1;
+}
+
+.score__name {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+.score__shared {
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--accent-quiet);
+  color: var(--accent);
+  font-size: 0.6875rem;
+  font-weight: 400;
+}
+
+.score__choices {
+  clear: both;
+  display: flex;
+  gap: var(--space-1);
+}
+
+.score__step,
+.score__yesno,
+.score__skip {
+  height: var(--tap);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-small);
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: var(--text-small);
+}
+
+.score__step {
+  flex: 1;
+  min-width: 0;
+}
+
+.score__yesno {
+  flex: 1;
+}
+
+.score__skip {
+  flex: 0 0 auto;
+  padding: 0 var(--space-3);
+  border-style: dashed;
+  color: var(--text-faint);
+}
+
+.score__step:hover,
+.score__yesno:hover,
+.score__skip:hover {
+  border-color: var(--border-strong);
+  color: var(--text-body);
+}
+
+.score__step[aria-pressed="true"],
+.score__yesno[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--surface-raised);
+  font-weight: 600;
+}
+
+.score__skip[aria-pressed="true"] {
+  border-style: solid;
+  border-color: var(--text-faint);
+  background: var(--text-faint);
+  color: var(--surface-raised);
+  font-weight: 600;
+}
