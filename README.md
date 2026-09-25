@@ -59,26 +59,23 @@
   <img src="docs/app.png" alt="The ranking, best room first, grouped by building" width="340">
 </div>
 
-House hunting is decided by whichever place was seen last. Five viewings in two days, and
-by the evening the third one is "the one with the good light" and nothing else — while the
-second one's water pressure, which was the reason it was ruled out, is gone.
+Several viewings over a few days blur together, and the reason one place was ruled out
+goes with them. Estate agents' apps list what is available; none of them records what the
+viewer thought of a place while standing in it.
 
-Estate agents' apps list what is for rent. None of them holds **what you thought of it
-while you were standing in it**, and that is the record that decides anything.
-
-- **Criteria are set once, up front**, while judgement is still cold, and are the same for
-  every place. Each carries a weight from 1 to 5.
-- **Scored where it belongs.** Transit and parking are the same for every unit in a
-  building, so they are answered once per building; light and water pressure per room.
-- **One tap per criterion**, saved as it is entered. A criterion that cannot be judged here
-  — the water was off — is marked **해당 없음** and leaves that room's total instead of
+- **Criteria are set once, up front**, before the first viewing, and are the same for every
+  place. Each carries a weight from 1 to 5.
+- **Each criterion is answered where it belongs.** Transit and parking are the same for
+  every unit in a building and are answered once per building; light and water pressure are
+  answered per room.
+- **One tap per criterion**, saved as it is entered. A criterion that cannot be judged in
+  the room is marked **해당 없음** and is excluded from that room's total rather than
   holding it back.
-- **The ranking** is by weighted percentage, with a building's adjacent rooms kept under
-  one header. A room with anything still open shows `—` and ranks below every finished one.
-- **Side by side** holds two or three rooms against each other criterion by criterion,
-  which is what settles the decision between the final two.
-- **Photos** are re-encoded on the device as they are taken, which resizes them and leaves
-  every EXIF field — the GPS position above all — behind.
+- **The ranking** is by weighted percentage, with a building's adjacent rooms under one
+  header. A room with anything open shows `—` and ranks below every finished one.
+- **Side by side** compares two or three rooms criterion by criterion.
+- **Photos** are re-encoded on the device as they are taken, which resizes them and drops
+  every EXIF field, including the GPS position.
 - Everything stays on the device. No account, no sync, no analytics.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
@@ -131,23 +128,21 @@ npm run tauri android dev  # the app, on a phone or an emulator
 
 ## Usage
 
-1. Start a hunt, and decide in **볼 것 정하기** what you are actually looking for. Twelve
-   criteria are there to begin with; whatever you leave them as is what the next hunt
-   starts from.
+1. Start a hunt and set the criteria in **볼 것 정하기**. Twelve are there to begin with;
+   however they are left is what the next hunt starts from.
 2. At a viewing, add the building and the room, then answer each criterion with one tap.
    **해당 없음** is for what cannot be judged there.
-3. **순위** ranks every room once nothing is left open. A room still being scored says how
+3. **순위** ranks every room once nothing is left open. A room still being scored shows how
    many answers are missing.
-4. **나란히 보기** picks two or three rooms and holds them against each other, marking the
-   better answer in each row.
+4. **나란히 보기** compares two or three rooms, marking the better answer in each row.
 
 The interface is in Korean.
 
 ### Coming from 1.0.0
 
-This is the same app written again, so the version is 2.0.0 and it installs over 1.0.0
-without a reinstall. Nothing carries across: the old hunts were in a SQLite database this
-version cannot read (ADR 3), and video waits for 2.1.0 (ADR 6).
+This is the same app written again. The version is 2.0.0 and it installs over 1.0.0 without
+a reinstall, but nothing carries across: the old hunts were in a SQLite database this
+version cannot read (ADR 3). Video waits for 2.1.0 (ADR 6).
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 

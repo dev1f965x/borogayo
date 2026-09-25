@@ -34,7 +34,7 @@ function read(key: string): unknown {
   try {
     return JSON.parse(localStorage.getItem(key) ?? "null");
   } catch {
-    // Blocked or full storage is not worth an error screen; nothing found is honest.
+    // Blocked or full storage is reported as nothing stored rather than as an error.
     return null;
   }
 }
@@ -46,8 +46,10 @@ function write(key: string, value: unknown) {
 }
 
 /**
- * Keeps only what this build understands. A value written by another version, or edited by
- * hand, costs its own entry rather than the whole screen.
+ * Keeps only what this build understands.
+ *
+ * An entry written by another version, or edited by hand, is dropped on its own rather
+ * than failing the read.
  */
 export function huntsFrom(stored: unknown): Hunt[] {
   if (!Array.isArray(stored)) return [];
@@ -67,7 +69,7 @@ export function huntsFrom(stored: unknown): Hunt[] {
         startedOn: typeof startedOn === "string" ? startedOn : "",
         criteria: criteriaFrom(entry.criteria),
         buildings,
-        // A room whose building did not survive has nothing to be scored against.
+        // A room whose building was dropped has nothing to be scored against.
         rooms: roomsFrom(entry.rooms).filter((room) => known.has(room.buildingId)),
       },
     ];

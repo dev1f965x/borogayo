@@ -83,7 +83,7 @@ describe("a first visit", () => {
     expect(screen.getByText("아직 시작한 게 없어요")).toBeInTheDocument();
   });
 
-  it("opens a new hunt on its criteria, which is what has to be decided first", async () => {
+  it("opens a new hunt on its criteria", async () => {
     const user = userEvent.setup();
     show(fakeStore());
 

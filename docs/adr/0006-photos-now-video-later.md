@@ -7,29 +7,28 @@ Date: 2026-09-25
 
 The Flutter version took photos and videos, copied them into app storage, and stripped the
 recorded location out of the MP4 by rewriting its boxes in place. A walk-through video is
-genuinely useful: it is the only thing that brings back a layout.
+useful: it is the only record that shows a layout.
 
-It is also minutes of footage. One is bigger than every photo of every place combined.
+It is also minutes of footage, and one is larger than every photo of every place together.
 
 ## Options
 
-- **Both, in the browser's storage.** A single video blows past what IndexedDB will hold,
-  and the promise that a hundred photos stay within a few megabytes goes with it.
-- **Both, with video on Android only through the file system.** Preserves the feature where
-  it is used. It needs a native plugin, a copy into app storage, a thumbnail, and the MP4
-  box rewriting ported — a body of work with no test path on the web build, for 2.0.0.
-- **Photos now, video on its own version.** Less than the old app does, said plainly.
+- **Both, in the browser's storage.** A single video exceeds what IndexedDB will hold, and
+  the requirement that a hundred photos stay within a few megabytes with it.
+- **Both, with video on Android only through the file system.** Keeps the feature where it
+  is used, but needs a native plugin, a copy into app storage, a thumbnail and the MP4 box
+  rewriting ported, none of which the web build can exercise.
+- **Photos now, video in a later version.** Less than the old app does.
 
 ## Decision
 
-Photos in 2.0.0. Video in 2.1.0, on Android only, where the file system makes it honest.
+Photos in 2.0.0. Video in 2.1.0, on Android only, where the file system can hold it.
 
 ## Consequences
 
-Less than the Flutter version could do, and the roadmap says so rather than leaving it
-implied.
+Less than the Flutter version could do, stated in the roadmap rather than left implied.
 
-Photos get something the old app had to write code for: every one is drawn onto a canvas
-and re-encoded as JPEG on the way in, which resizes it and, in doing so, leaves behind
-every EXIF field — the GPS position, the camera, the timestamp. Stripping metadata stops
-being a routine that can have a bug in it and becomes a property of how the file is made.
+Photos gain what the old app needed code for. Each is drawn onto a canvas and re-encoded as
+JPEG on the way in, which resizes it and drops every EXIF field with it: the GPS position,
+the camera and the timestamp. Removing metadata is a property of how the file is made
+rather than a routine that can fail.

@@ -10,21 +10,14 @@ interface Props {
   onAnswer: (answer: Answer | undefined) => void;
 }
 
-/**
- * The steps a 0–10 criterion offers.
- *
- * Six buttons is what fits across a phone at a size a thumb can hit without looking, and
- * finer steps would not survive the setting anyway: nobody standing in a stranger's
- * bathroom is deciding between a 7 and a 7.5.
- */
+/** The steps a 0–10 criterion offers. Six fit across a phone at a tappable size. */
 const STEPS = [0, 2, 4, 6, 8, 10];
 
 /**
  * One criterion, answered in a single tap.
  *
- * The name is the group's legend rather than a heading beside it, so what is read out is
- * what is on screen, once. Tapping what is already chosen takes the answer back off, so a
- * mis-tap costs one more tap rather than a trip through a menu.
+ * The name is the group's legend rather than a separate heading, so it is announced once.
+ * Tapping the current answer clears it, which is how a mis-tap is corrected.
  */
 export function ScoreRow({ criterion, answer, shared, onAnswer }: Props) {
   const choose = (value: Answer) => onAnswer(answer === value ? undefined : value);

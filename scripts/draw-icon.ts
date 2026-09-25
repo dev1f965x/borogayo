@@ -2,8 +2,8 @@ import { mkdirSync } from "node:fs";
 import { chromium } from "@playwright/test";
 
 /**
- * Draws the app's icon — the same house the window shows — at the size Tauri's generator
- * wants, and leaves it for `npx tauri icon` to cut into every format.
+ * Draws the app's icon, the same house the window shows, at the size Tauri's generator
+ * expects. `npx tauri icon` cuts it into every format.
  *
  *   npm run art:icon   → src-tauri/icons/source.png
  */

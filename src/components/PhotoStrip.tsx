@@ -16,11 +16,10 @@ interface Props {
 }
 
 /**
- * The photos of one place, taken on site and filed by which part they show.
+ * The photos of one place, filed by which part of it they show.
  *
- * Each one is drawn onto a canvas and re-encoded on the way in, which is what resizes it —
- * and, in doing so, leaves every EXIF field behind, the recorded position above all
- * (ADR 6).
+ * Each is drawn onto a canvas and re-encoded on the way in. That resizes it, and drops
+ * every EXIF field with it, including the recorded position (ADR 6).
  */
 export function PhotoStrip({ photos, areas, store, heading, onAdd, onRemove }: Props) {
   const [area, setArea] = useState(PHOTO_LABELS[`${areas}Areas`][0]);

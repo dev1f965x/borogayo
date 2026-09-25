@@ -29,7 +29,7 @@ export function useHunts(store: Store, photos: Photos, today: string) {
     [store],
   );
 
-  /** Rewrites the open hunt, which is what nearly every change here amounts to. */
+  /** Rewrites one hunt in place, as nearly every change below does. */
   const change = useCallback(
     (id: string, how: (hunt: Hunt) => Hunt) => {
       keep(hunts.map((hunt) => (hunt.id === id ? how(hunt) : hunt)));
@@ -43,7 +43,7 @@ export function useHunts(store: Store, photos: Photos, today: string) {
 
   const start = useCallback(
     (name: string) => {
-      // Whatever the criteria were last left as, copied with fresh ids of their own.
+      // The criteria as they were last left, copied with new ids.
       const criteria = (store.readStartingCriteria() ?? STARTING_CRITERIA).map((criterion) => ({
         ...criterion,
         id: crypto.randomUUID(),
@@ -194,7 +194,7 @@ export function useHunts(store: Store, photos: Photos, today: string) {
       if (!hunt || !room) return;
 
       undoable(message);
-      // A building without rooms is a place nobody went into, so it goes with the last one.
+      // A building is only there to hold rooms, so it goes with the last of them.
       const left = hunt.rooms.filter((each) => each.id !== roomId);
       const emptied = !left.some((each) => each.buildingId === room.buildingId);
       const building = hunt.buildings.find((each) => each.id === room.buildingId);

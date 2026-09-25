@@ -1,10 +1,10 @@
 import "./HouseMark.css";
 
 /**
- * The app's mark, as it has always been: a house with a decision made about it.
+ * The app's mark: a house with a check over it.
  *
- * The name is beside it wherever it is drawn, so it is decoration and says nothing of its
- * own — otherwise every reading of the header says the name twice.
+ * The name is beside it wherever it is drawn, so the mark is decorative; labelling it would
+ * make the header read the name twice.
  */
 export function HouseMark() {
   return (

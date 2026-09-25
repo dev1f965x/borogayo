@@ -10,9 +10,10 @@ interface Props {
 }
 
 /**
- * Where a place gets added, in the order it happens: you are shown into a building, and
- * then into a room in it. A building already visited is picked rather than typed again,
- * because that is what makes two rooms share its answers.
+ * Adds a place, in the order a viewing happens: a building, then a room in it.
+ *
+ * A building already visited is picked rather than typed again, so that its rooms share
+ * its answers.
  */
 export function AddPlace({ hunt, onAddBuilding, onAddRoom }: Props) {
   const [buildingId, setBuildingId] = useState<string>();

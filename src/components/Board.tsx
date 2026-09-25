@@ -23,7 +23,7 @@ export function Board({ hunt, onOpenRoom, onAddBuilding, onAddRoom, onCompare }:
 
   const board = ranked(hunt);
   const runs = inRuns(board);
-  // A building someone looked at from outside and never went into, said once at the end.
+  // A building with no rooms yet, mentioned once below the list.
   const unvisited = hunt.buildings.find(
     (building) => !hunt.rooms.some((room) => room.buildingId === building.id),
   );
