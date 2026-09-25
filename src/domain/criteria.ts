@@ -1,23 +1,23 @@
 /**
- * Whether a criterion is judged once per building or once per room.
+ * Whether a criterion is answered once per building or once per room.
  *
- * Transit and parking are the same for every unit in a building; asking for them again in
- * each room is repetitive, and the answers drift apart when it is asked twice.
+ * Transit and parking are the same for every unit in a building, so asking per room
+ * duplicates the answer and lets the copies diverge.
  */
 export type Scope = "building" | "room";
 
 /**
  * How a criterion is answered.
  *
- * - `scale`: 0–10, in halves
+ * - `scale`: 0–10
  * - `yesNo`: yes or no, kept as 10 or 0 so one weighted sum covers both
  */
 export type Kind = "scale" | "yesNo";
 
-/** The top of both scales, which is what makes a single weighted formula possible. */
+/** The top of both scales, so one weighted formula covers them. */
 export const BEST = 10;
 
-/** How much a criterion is allowed to matter, relative to the others. */
+/** How much a criterion counts, relative to the others. */
 export const WEIGHTS = [1, 2, 3, 4, 5] as const;
 export type Weight = (typeof WEIGHTS)[number];
 
@@ -32,10 +32,10 @@ export interface Criterion {
   weight: Weight;
 }
 
-/** What a room's answer to one criterion can be: a number, deliberately skipped, or open. */
+/** A room's answer to one criterion: a value, an exclusion, or nothing yet. */
 export type Answer = number | "skipped";
 
-/** The criteria a new hunt starts from, until the person edits their own set. */
+/** The criteria a new hunt starts from, until they are edited. */
 export const STARTING_CRITERIA: readonly Omit<Criterion, "id">[] = [
   { name: "교통", emoji: "🚇", scope: "building", kind: "scale", weight: 4 },
   { name: "주변 편의시설", emoji: "🏪", scope: "building", kind: "scale", weight: 3 },

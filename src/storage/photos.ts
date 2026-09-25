@@ -2,9 +2,9 @@ const DATABASE = "borogayo";
 const SHELF = "photos";
 
 /**
- * The pictures, which are the only thing here too big for localStorage (ADR 5). Every call
- * is a promise, and the database is only opened once a picture is actually wanted, so a
- * hunt without photos never touches it.
+ * The pictures, which are the only data here too large for localStorage (ADR 5).
+ *
+ * The database is opened on first use, so a hunt without photos never touches it.
  */
 export interface Photos {
   put(id: string, photo: Blob): Promise<void>;
@@ -42,7 +42,7 @@ async function inShelf<T>(
       request.onerror = () => reject(request.error);
     });
   } catch {
-    // A picture is the one part of a place that can be missing without breaking anything.
+    // A missing picture costs nothing else on the screen.
     return undefined;
   }
 }

@@ -1,30 +1,29 @@
 import { type Answer, BEST, type Criterion } from "./criteria";
 
-/** What a room comes to, and how much of it was actually judged. */
+/** A room's total, and how much of it the total rests on. */
 export interface Score {
-  /** 0–100, and undefined while anything is still open (ADR 7). */
+  /** 0–100. Undefined while any criterion is unanswered (ADR 7). */
   percent?: number;
   /** Criteria given a value. */
   answered: number;
-  /** Criteria deliberately left out of this room's total. */
+  /** Criteria excluded from this room's total. */
   skipped: number;
-  /** Criteria with no answer either way — what holds the percentage back. */
+  /** Criteria with no answer, which withholds the percentage. */
   open: number;
   total: number;
 }
 
 /**
- * Weights the answers by how much each criterion matters and puts them on 0–100.
+ * Weights the answers by criterion and expresses the result as 0–100.
  *
- * A number is only given once nothing is open, because a number on a half-judged place
- * cannot tell "what this place is worth" from "what has been judged so far" — and on a
- * screen where the list is the ranking, that ambiguity becomes a wrong decision.
+ * The percentage is withheld until nothing is open, since a partial total reads the same
+ * as a complete one and the list is the ranking (ADR 7).
  *
- * A criterion skipped as 해당 없음 leaves the sum on both sides, so the percentage is over
- * what was judged rather than over what was asked. A room where everything was skipped has
- * nothing to average and gets no number either.
+ * A criterion excluded as 해당 없음 is dropped from both sides of the sum, so the result
+ * covers what was judged rather than what was asked. A room with every criterion excluded
+ * has nothing to average and is withheld as well.
  *
- * Yes/no answers are kept as 10 or 0, so both kinds go through the same sum.
+ * Yes/no answers are stored as 10 or 0, so one sum covers both kinds.
  */
 export function score(criteria: readonly Criterion[], answers: Record<string, Answer>): Score {
   let weighted = 0;
@@ -33,8 +32,7 @@ export function score(criteria: readonly Criterion[], answers: Record<string, An
   let skipped = 0;
   let open = 0;
 
-  // Walked over the criteria, not the answers, so a value left behind by a deleted
-  // criterion cannot creep back into a total.
+  // Iterating the criteria rather than the answers keeps values from deleted criteria out.
   for (const criterion of criteria) {
     const answer = answers[criterion.id];
 
@@ -67,7 +65,7 @@ export function isFinished(score: Score): boolean {
   return score.percent !== undefined;
 }
 
-/** What still has to be answered before a room can be ranked. */
+/** The criteria that are still unanswered. */
 export function stillOpen(
   criteria: readonly Criterion[],
   answers: Record<string, Answer>,

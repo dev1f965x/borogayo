@@ -1,5 +1,5 @@
 import { type Answer, BEST } from "../domain/criteria";
-import { answersFor, type Hunt } from "../domain/hunt";
+import { answersFor, buildingOf, type Hunt } from "../domain/hunt";
 import { BOARD_LABELS, COMPARE_LABELS, SCORE_LABELS } from "../domain/labels";
 import { score } from "../domain/scoring";
 import "./Compare.css";
@@ -11,17 +11,17 @@ interface Props {
 }
 
 /**
- * Two or three rooms held against each other, criterion by criterion.
+ * Two or three rooms compared criterion by criterion.
  *
- * The ranking says which is better overall; this says where. A skipped criterion shows as
- * itself rather than as an empty cell, because "not judged here" is a real difference
- * between two places and hiding it would flatter one of them (ADR 7).
+ * The ranking gives the overall order; this gives the difference per criterion. An excluded
+ * criterion is shown as excluded rather than left blank, since it is a difference between
+ * the rooms (ADR 7).
  */
 export function Compare({ hunt, roomIds, onClose }: Props) {
   const rooms = roomIds.flatMap((id) => {
     const room = hunt.rooms.find((each) => each.id === id);
     if (!room) return [];
-    const building = hunt.buildings.find((each) => each.id === room.buildingId);
+    const building = buildingOf(hunt, room);
     return [{ room, building, answers: answersFor(hunt, room) }];
   });
 

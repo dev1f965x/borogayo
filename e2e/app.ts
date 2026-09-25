@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 
 /** Opens the app with hunts already stored, as someone coming back to one finds it. */
 export async function openApp(page: Page, hunts: unknown[] = []) {
-  // Seeded once, not on every navigation, so a reload sees what the app itself wrote.
+  // Seeded once, not on every navigation, so a reload sees what the app wrote.
   await page.addInitScript((hunts) => {
     if (window.localStorage.getItem("borogayo.hunts") !== null) return;
     window.localStorage.setItem("borogayo.hunts", JSON.stringify(hunts));

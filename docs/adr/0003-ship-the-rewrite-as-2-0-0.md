@@ -25,9 +25,9 @@ read.
 ## Consequences
 
 An installed copy updates in place rather than needing a reinstall, and the major version
-is the warning that the old hunts do not come across. Keeping the key means a copy
-installed from the old release can still be updated; changing it would have broken that
+records that the old hunts do not come across. Keeping the key is what allows a copy
+installed from the old release to be updated at all; changing it would end that
 permanently.
 
-No migration is written. A hunt is days of work at most, and a migration from a schema
-nothing else shares would cost more than re-entering it.
+No migration is written. A hunt is at most a few days of entries, and a migration from a
+schema nothing else uses would cost more than re-entering them.

@@ -2,9 +2,10 @@
 export const WIDEST = 640;
 
 /**
- * Shrinks a photo straight off the camera to something worth keeping, on the device and
- * before it is ever stored (ADR 4). A file that is not an image, or a browser that cannot
- * draw it, gives nothing back rather than an error: the photo is optional.
+ * Shrinks a photo from the camera on the device, before it is stored (ADR 6).
+ *
+ * A file that is not an image, or a browser that cannot draw it, returns nothing rather
+ * than throwing, since the photo is optional.
  */
 export async function shrink(file: Blob, widest = WIDEST): Promise<Blob | undefined> {
   try {

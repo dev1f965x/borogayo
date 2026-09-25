@@ -5,19 +5,19 @@ Date: 2026-09-25
 
 ## Context
 
-The first 보러가요 was Flutter with SQLite, Android only. It worked, but it sat apart from
-every other app here: its own language, its own build, its own release path, and no way to
-look at a ranking on a laptop after a day of viewings.
+The first 보러가요 was Flutter with SQLite, Android only. It worked, but it shared nothing
+with the other apps here — its own language, build and release path — and the ranking could
+only be read on the phone.
 
 ## Options
 
-- **Keep Flutter.** Nothing to rewrite. But the ranking stays locked to the phone, and the
-  toolchain is maintained for one app.
-- **Tauri 2 with a web front end.** One code base serves a page and an Android app. Shares
-  the lint, test, screenshot and release setup already used by the other apps. The rewrite
-  is the cost, and anything needing real file access gets harder.
+- **Keep Flutter.** Nothing to rewrite, but the ranking stays on the phone and a toolchain
+  is maintained for one app.
+- **Tauri 2 with a web front end.** One code base serves a page and an Android app, and the
+  lint, test, screenshot and release setup of the other apps applies. The rewrite is the
+  cost, and anything needing file access becomes harder.
 - **A plain web app, no shell.** Simplest, but no installable app on the phone, which is
-  where the app is actually used — standing in someone's hallway.
+  where it is used.
 
 ## Decision
 
@@ -26,11 +26,11 @@ whole app; the shell only hosts it.
 
 ## Consequences
 
-A day's viewings can be read back on a laptop. Everything the other apps already solved —
-CI, signing, screenshots for design review — applies unchanged.
+A day's viewings can be read back on a laptop, and the CI, signing and screenshot setup of
+the other apps applies unchanged.
 
-The phone and the browser hold separate hunts, because nothing syncs (ADR 4). Features
-that want the file system, video above all, become harder and are deferred (ADR 5).
+The phone and the browser hold separate hunts, since nothing syncs (ADR 5). Features that
+need the file system, video in particular, are deferred (ADR 6).
 
-The stored data has no relation to the old SQLite database, so an installed copy starts
-empty. That is why this ships as 2.0.0 (ADR 3).
+The stored data is unrelated to the old SQLite database, so an installed copy starts empty.
+That is why this ships as 2.0.0 (ADR 3).

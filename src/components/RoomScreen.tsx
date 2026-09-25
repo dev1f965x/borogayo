@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Answer } from "../domain/criteria";
-import { answersFor, type Hunt, type Room } from "../domain/hunt";
+import { answersFor, buildingOf, type Hunt, type Room } from "../domain/hunt";
 import { BOARD_LABELS, PLACE_LABELS, SCORE_LABELS } from "../domain/labels";
 import { score } from "../domain/scoring";
 import type { Photos } from "../storage/photos";
@@ -34,7 +34,7 @@ export function RoomScreen({
 }: Props) {
   const [memo, setMemo] = useState(room.memo ?? "");
 
-  const building = hunt.buildings.find((each) => each.id === room.buildingId);
+  const building = buildingOf(hunt, room);
   const answers = answersFor(hunt, room);
   const total = score(hunt.criteria, answers);
 

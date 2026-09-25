@@ -1,11 +1,11 @@
-import { answersFor, type Building, type Hunt, type Room } from "./hunt";
+import { answersFor, type Building, buildingOf, type Hunt, type Room } from "./hunt";
 import { isFinished, type Score, score } from "./scoring";
 
 export interface Ranked {
   room: Room;
   building: Building;
   score: Score;
-  /** Its position among the finished rooms, or undefined while it is not one. */
+  /** Position among the finished rooms; undefined while the room is unfinished. */
   rank?: number;
 }
 
@@ -18,12 +18,11 @@ export interface Run {
 /**
  * Every room of a hunt, best first.
  *
- * Unfinished rooms sort to the bottom and carry no rank: they are on the list because they
- * were visited, not because they are competing yet.
+ * Unfinished rooms sort last and carry no rank.
  */
 export function ranked(hunt: Hunt): Ranked[] {
   const scored = hunt.rooms.flatMap((room) => {
-    const building = hunt.buildings.find((each) => each.id === room.buildingId);
+    const building = buildingOf(hunt, room);
     if (!building) return [];
     return [{ room, building, score: score(hunt.criteria, answersFor(hunt, room)) }];
   });
@@ -46,9 +45,8 @@ export function ranked(hunt: Hunt): Ranked[] {
 /**
  * Splits a ranked list into stretches of the same building.
  *
- * The order stays by score, so a building appears again whenever a room of another
- * building sits between two of its own. That repetition is the point: it is what shows
- * that one building's rooms are not all equally good.
+ * The order stays by score, so a building recurs whenever a room of another building falls
+ * between two of its own.
  */
 export function inRuns(board: readonly Ranked[]): Run[] {
   const runs: Run[] = [];

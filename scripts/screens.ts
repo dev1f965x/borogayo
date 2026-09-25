@@ -6,7 +6,7 @@ import { createServer } from "vite";
  * Photographs every state of the app, for design review and the README.
  *
  * The same page runs in a browser tab and in the Android app, so one set of shots covers
- * both — at a phone's width, and at a desktop window's.
+ * both, at a phone's width and at a desktop window's.
  *
  *   npm run screens        → screens/*.png
  */
@@ -131,7 +131,7 @@ async function main() {
     logLevel: "error",
   });
   await server.listen();
-  // Headless Chromium hides scrollbars; the real window has one, and it takes room.
+  // Headless Chromium hides scrollbars, which the real window shows and gives room to.
   const browser = await chromium.launch({
     channel: "msedge",
     ignoreDefaultArgs: ["--hide-scrollbars"],
@@ -149,7 +149,7 @@ async function main() {
       await page.goto(`http://localhost:${PORT}`);
       await page.getByRole("heading", { level: 1 }).waitFor();
       await shot.act?.(page);
-      // Park the pointer where nothing reacts to it, so no hover state is photographed.
+      // Park the pointer clear of the page, so no hover state is photographed.
       await page.mouse.move(1, (shot.viewport ?? PHONE).height - 1);
       await page.waitForTimeout(300);
       await page.screenshot({ path: `${OUT}/${shot.name}.png` });
